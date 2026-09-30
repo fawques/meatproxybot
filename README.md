@@ -55,6 +55,20 @@ which variables are missing.
 
 ## Usage
 
+### Reaction trigger (not anonymous)
+
+React to a message with `:meat_proxy:` (or whatever `TRIGGER_EMOJI` is set
+to) and the bot calls it out: it adds its own `:meat_proxy:` and posts a
+callout in the message's thread. The trigger emoji can be the same one the
+bot responds with.
+
+This trigger is **not anonymous**: Slack shows everyone who reacted. For an
+anonymous callout, use the message shortcut or `/meatproxy` instead.
+
+The reactor gets no feedback. A message that was already called out is
+left alone, and errors (for example, the bot is not in the channel) are
+only logged at warn level. Removing the reaction does nothing.
+
 ### Message shortcut (anonymous)
 
 Hover over a message, open its _More actions_ (⋮) menu and choose
