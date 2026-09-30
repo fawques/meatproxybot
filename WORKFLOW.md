@@ -13,10 +13,13 @@ tracker:
   # Grill Me to have an agent question you until its scope is defined.
   # Awaiting Answers is deliberately neither active nor terminal: it parks a
   # grilled issue until you reply and move it back to Grill Me.
+  # In Review is active: an agent reviews the PR and moves the issue back to
+  # Todo to fix its comments, or on to Merging when nothing is left to fix.
   active_states:
     - Grill Me
     - Todo
     - In Progress
+    - In Review
     - Merging
     - Rework
   terminal_states:
@@ -100,7 +103,7 @@ Work only in the provided repository copy. Do not touch any other path.
 - Until this section lists validation commands, validate with whatever tests the change adds and say in the workpad what was run.
 - User-facing changes: verify the flow in a browser (Playwright if available) and attach a screenshot to the workpad.
 - Never commit secrets or `.env`.
-- Only merge from the `Merging` state, through the `land` skill.
+- Only merge from the `Merging` state, through the `land` skill. Only the review flow moves an issue to `Merging`.
 
 ## Prerequisite: `linear_graphql` MCP tool is available
 
@@ -140,11 +143,11 @@ Symphony provides a `linear_graphql` MCP tool to each agent session. Use it to r
 - `Grill Me` -> planning requested; run the grill flow (the `grilling` skill). No code, branch or PR.
 - `Awaiting Answers` -> a grill round or the final criteria are posted; waiting for the human to reply and move the issue back to `Grill Me`. Never dispatched.
 - `Todo` -> queued; immediately transition to `In Progress` before active work.
-  - Special case: if a PR is already attached, treat as feedback/rework loop (run full PR feedback sweep, address or explicitly push back, revalidate, remove `symphony-implementing`, return to `In Review`).
+  - Special case: if a PR is already attached, treat as feedback loop (run full PR feedback sweep, address or explicitly push back, revalidate, remove `symphony-implementing`, return to `In Review`). This is where the review flow sends issues with comments to fix.
 - `In Progress` -> implementation actively underway.
-- `In Review` -> PR is attached and validated; waiting on human approval.
-- `Merging` -> approved by human; execute the `land` skill flow (do not call `gh pr merge` directly).
-- `Rework` -> reviewer requested changes; planning + implementation required.
+- `In Review` -> PR is attached and validated; run the review flow (Step 3), which moves the issue to `Todo` (comments to fix) or `Merging` (nothing left to fix).
+- `Merging` -> the review flow found nothing left to fix; execute the `land` skill flow (do not call `gh pr merge` directly).
+- `Rework` -> a human requested a full approach reset; planning + implementation required.
 - `Done` -> terminal state; no further action required.
 
 ## Linear state labels
@@ -153,14 +156,14 @@ Three team labels make it visible in Linear that an agent holds an issue. They a
 
 - `symphony-grilling`: an agent is grilling the issue. Added as the first Linear action of the Grill flow; removed right before every move out of `Grill Me` (to `Awaiting Answers` or `Backlog`).
 - `symphony-already-grilled`: the human confirmed the grilled Scope and Acceptance Criteria. Added on the move to `Backlog` that ends grilling. Never removed.
-- `symphony-implementing`: an agent is implementing the issue. Added as the first Linear action in `Todo` (right after the move to `In Progress`), `In Progress` and `Rework`, including the Todo-with-PR feedback loop. Removed right before every move to `In Review` (including the blocked-access escape hatch) or to `Done`. `Merging` gets no label.
+- `symphony-implementing`: an agent is implementing the issue. Added as the first Linear action in `Todo` (right after the move to `In Progress`), `In Progress` and `Rework`, including the Todo-with-PR feedback loop. Removed right before every move to `In Review`, to `Backlog` (the blocked-access escape hatch) or to `Done`. `In Review` and `Merging` get no label.
 
 Rules:
 
 - Change labels only with `issueAddLabel(id, labelId)` / `issueRemoveLabel(id, labelId)`. Never set `labelIds` through `issueUpdate`: it replaces the issue's whole label set and would drop the human's labels.
 - Look the label up by name in the issue's team (`issueLabels(filter: {name: {eq: "<name>"}, team: {id: {eq: "<teamId>"}}})`). If it is missing, create it with `issueLabelCreate` in that team, with no parent and the same colour as the other `symphony-` labels (`#5E6AD2` if none exists).
 - A failed label call, including creating a missing label, is never a blocker. Note it in the workpad (or the `## Grill` comment while grilling) and carry on.
-- States that are terminal or never dispatched (`Backlog`, `Done`, `Canceled`, `Duplicate`, `Awaiting Answers`, `In Review`) get no labelling, except the removal on the move into them.
+- States that are terminal or never dispatched (`Backlog`, `Done`, `Canceled`, `Duplicate`, `Awaiting Answers`) get no labelling, except the removal on the move into them.
 - Adding a label that is already on the issue, or removing one that is not, is harmless; do not check first.
 
 ## Step 0: Determine current ticket state and route
@@ -176,7 +179,7 @@ Rules:
    - `Todo` -> immediately move to `In Progress`, add `symphony-implementing`, then ensure bootstrap workpad comment exists (create if missing), then start execution flow.
      - If PR is already attached, start by reviewing all open PR comments and deciding required changes vs explicit pushback responses.
    - `In Progress` -> add `symphony-implementing`, then continue execution flow from current workpad comment.
-   - `In Review` -> wait and poll for decision/review updates.
+   - `In Review` -> follow the review flow (Step 3) and skip steps 4 and 5. Do not change code.
    - `Merging` -> follow the `land` skill flow; do not call `gh pr merge` directly.
    - `Rework` -> add `symphony-implementing`, then run rework flow.
    - `Done` -> do nothing and shut down.
@@ -259,7 +262,7 @@ Use this only when completion is blocked by missing required tools or missing au
 
 - GitHub is **not** a valid blocker by default. Always try fallback strategies first (alternate remote/auth mode, then continue publish/review flow).
 - Do not move to `In Review` for GitHub access/auth until all fallback strategies have been attempted and documented in the workpad.
-- If a non-GitHub required tool is missing, or required non-GitHub auth is unavailable, remove `symphony-implementing` and move the ticket to `In Review` with a short blocker brief in the workpad that includes:
+- If a non-GitHub required tool is missing, or required non-GitHub auth is unavailable, remove `symphony-implementing` and move the ticket to `Backlog` (never dispatched, so it stays parked until a human unblocks it and moves it to `Todo`) with a short blocker brief in the workpad that includes:
   - what is missing,
   - why it blocks required acceptance/validation,
   - exact human action needed to unblock.
@@ -302,20 +305,31 @@ Use this only when completion is blocked by missing required tools or missing au
     - Repeat this check-address-verify loop until no outstanding comments remain and checks are fully passing.
     - Re-open and refresh the workpad before state transition so `Plan`, `Acceptance Criteria`, and `Validation` exactly match completed work.
 12. Only then remove `symphony-implementing` and move issue to `In Review`.
-    - Exception: if blocked by missing required non-GitHub tools/auth per the blocked-access escape hatch, remove `symphony-implementing` and move to `In Review` with the blocker brief and explicit unblock actions.
+    - Exception: if blocked by missing required non-GitHub tools/auth per the blocked-access escape hatch, remove `symphony-implementing` and move to `Backlog` with the blocker brief and explicit unblock actions.
 13. For `Todo` tickets that already had a PR attached at kickoff:
     - Ensure all existing PR feedback was reviewed and resolved, including inline review comments (code changes or explicit, justified pushback response).
     - Ensure branch was pushed with any required updates.
     - Then remove `symphony-implementing` and move to `In Review`.
 
-## Step 3: In Review and merge handling
+## Step 3: Review flow (In Review) and merge handling
 
-1. When the issue is in `In Review`, do not code or change ticket content.
-2. Poll for updates as needed, including GitHub PR review comments from humans and bots.
-3. If review feedback requires changes, move the issue to `Rework` and follow the rework flow.
-4. If approved, human moves the issue to `Merging`.
-5. When the issue is in `Merging`, follow the `land` skill flow. Do not call `gh pr merge` directly.
-6. After merge is complete, remove `symphony-implementing` (normally already gone) and move the issue to `Done`.
+In `In Review` you are the reviewer, not the implementer: do not change code, commit, push, or edit the issue description. Each run is one review round.
+
+1. Identify the PR from the issue attachments. If none is attached, or it is `CLOSED`/`MERGED`, add a short note to the workpad and move the issue to `Todo`.
+2. Check out the PR branch and read, in full:
+   - the issue, every comment, the workpad (its `Acceptance Criteria` and `Validation`) and any `## Grill` Scope and Acceptance Criteria;
+   - the PR diff against `origin/main`;
+   - all existing PR feedback, through every channel of the PR feedback sweep protocol, including replies;
+   - the PR checks on the latest commit.
+3. Review the diff for correctness, and against the acceptance criteria and the `meatproxybot repository facts` above. Report only actionable findings: bugs, unmet acceptance criteria, missing or failing validation, rule violations. No style preferences.
+4. Do not re-raise a thread that was fixed in code or answered with a justified pushback reply. Re-raise only when the fix is wrong or incomplete, saying why on that thread.
+5. Post all new findings as one GitHub PR review with inline comments on the relevant lines (`gh api repos/fawques/meatproxybot/pulls/<pr>/reviews` with `event: COMMENT`; GitHub rejects `REQUEST_CHANGES` and `APPROVE` from the PR's own author, which the agents' GitHub identity is). Post nothing when there are no new findings.
+6. Add one line to the workpad `Notes`: the review round's time, head short SHA, and the number of new findings and still-open threads.
+7. Decide, then change state as your last action (moving the issue out of `In Review` stops this session, so anything after it is lost):
+   - New findings, any actionable thread (human or bot) neither fixed nor answered with a justified pushback, or failing checks -> move the issue to `Todo`. The Todo-with-PR flow fixes them and returns it to `In Review`.
+   - Otherwise, nothing is left to fix -> move the issue to `Merging`.
+8. When the issue is in `Merging`, follow the `land` skill flow. Do not call `gh pr merge` directly.
+9. After merge is complete, remove `symphony-implementing` (normally already gone) and move the issue to `Done`.
 
 ## Step 4: Rework handling
 
@@ -354,7 +368,7 @@ Use this only when completion is blocked by missing required tools or missing au
   link to the current issue, and `blockedBy` when the follow-up depends on the
   current issue.
 - Do not move to `In Review` unless the `Completion bar before In Review` is satisfied.
-- In `In Review`, do not make changes; wait and poll.
+- In `In Review`, do not change code; only review, comment on the PR, and move the issue to `Todo` or `Merging`.
 - If state is terminal (`Done`), do nothing and shut down.
 - Keep issue text concise, specific, and reviewer-oriented.
 - If blocked and no workpad exists yet, add one blocker comment describing blocker, impact, and next unblock action.
