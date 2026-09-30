@@ -38,4 +38,20 @@ describe("registerHandlers", () => {
       registerHandlers(app, config);
     }).not.toThrow();
   });
+
+  it("registers the message shortcut", () => {
+    const app = new App({
+      token: config.slackBotToken,
+      appToken: config.slackAppToken,
+      socketMode: true,
+      logLevel: LogLevel.ERROR,
+      tokenVerificationEnabled: false,
+    });
+    const shortcut = vi.spyOn(app, "shortcut");
+    registerHandlers(app, config);
+    expect(shortcut).toHaveBeenCalledWith(
+      "call_out_meat_proxy",
+      expect.any(Function),
+    );
+  });
 });

@@ -1,5 +1,6 @@
 import { App, LogLevel } from "@slack/bolt";
 import type { Config } from "./config.js";
+import { registerShortcut } from "./shortcut.js";
 
 export interface CreateAppOptions {
   logLevel?: LogLevel;
@@ -28,10 +29,11 @@ export function createApp(config: Config, options: CreateAppOptions = {}): App {
 
 /**
  * Registers every trigger (reaction, message shortcut, slash command) on the
- * app. The triggers themselves are added by later tickets.
+ * app. The reaction and slash command triggers are added by later tickets.
  */
 export function registerHandlers(app: App, config: Config): void {
   app.logger.debug(
     `registering handlers (trigger emoji :${config.triggerEmoji}:)`,
   );
+  registerShortcut(app);
 }
