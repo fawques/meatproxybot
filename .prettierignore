@@ -1,0 +1,8 @@
+dist
+coverage
+package-lock.json
+# Orchestration files, not owned by the app's formatting.
+.claude
+sandbox
+sbxenv.yaml
+WORKFLOW.md

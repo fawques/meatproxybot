@@ -39,6 +39,7 @@ hooks:
   # Full clone, not shallow: agents merge origin/main into their branches.
   after_create: |
     git clone https://github.com/fawques/meatproxybot.git .
+    npm ci
   before_run: |
     git fetch origin --prune
   timeout_ms: 300000
@@ -99,8 +100,8 @@ Work only in the provided repository copy. Do not touch any other path.
 ## meatproxybot repository facts
 
 - Default branch is `main`. Branch from `origin/main` and name branches `{{ issue.identifier | downcase }}-<short-slug>`.
-- The repository has no code, build or CI yet. The first issue that adds a stack should also add its setup to the root `README.md`, its install step to the `after_create` hook in this file, its toolchain to `sandbox/kits/meatproxybot/spec.yaml` if the stock sandbox lacks it, and the required validation commands to this section.
-- Until this section lists validation commands, validate with whatever tests the change adds and say in the workpad what was run.
+- Stack: TypeScript on Node 22 with `@slack/bolt` in Socket Mode, Vitest, ESLint and Prettier. `npm ci` installs it (the `after_create` hook runs it).
+- Required validation before every push: `npm run lint && npm run typecheck && npm test` (CI also runs `npm run build`). Tests use a mocked Slack client; agents get no Slack secrets, and the human smoke-tests in a real workspace.
 - User-facing changes: verify the flow in a browser (Playwright if available) and attach a screenshot to the workpad.
 - Never commit secrets or `.env`.
 - Only merge from the `Merging` state, through the `land` skill. Only the review flow moves an issue to `Merging`.

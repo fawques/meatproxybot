@@ -2,6 +2,42 @@
 
 don't be a meat proxy
 
+A Slack bot that calls out people who paste AI-generated text without
+reading it. Trigger it on a message (a reaction, a message shortcut or a
+slash command) and it posts a canned callout in the message's thread and
+adds `:meat_proxy:`. It runs in Socket Mode, so it needs no public URL.
+
+## Setup
+
+You need Node 22 or later and a Slack workspace where you can create apps.
+
+1. **Create the Slack app from `manifest.yml`.** At
+   <https://api.slack.com/apps>, choose _Create New App_ → _From a
+   manifest_, pick the workspace and paste in `manifest.yml`. It declares
+   Socket Mode, the bot scopes, the `reaction_added` event, the
+   `/meatproxy` command and the _🥩 Call out meat proxy_ shortcut.
+2. **Generate the app-level token and install the app.** Under _Basic
+   Information_ → _App-Level Tokens_, generate a token with the
+   `connections:write` scope (`xapp-…`). Then, under _Install App_, install
+   it to the workspace and copy the _Bot User OAuth Token_ (`xoxb-…`).
+3. **Upload a custom emoji named `:meat_proxy:`.** The repo ships no
+   artwork: pick any image. To use another emoji, set `TRIGGER_EMOJI`.
+4. **Invite the bot to channels** where it should work, with
+   `/invite @meatproxybot`.
+5. **Fill in `.env`:** `cp .env.example .env`, then set `SLACK_BOT_TOKEN`
+   and `SLACK_APP_TOKEN`. `.env` is gitignored; never commit it.
+6. **Run it with `npm run dev`** after `npm ci`. It logs a JSON `ready` line
+   once connected. For production, `npm run build && npm start`.
+
+### Development
+
+```sh
+npm ci
+npm run lint && npm run typecheck && npm test
+```
+
+Tests never connect to Slack and need no Slack tokens.
+
 ## Agents
 
 Issues in the Linear project
