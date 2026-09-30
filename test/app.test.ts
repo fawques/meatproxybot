@@ -38,4 +38,20 @@ describe("registerHandlers", () => {
       registerHandlers(app, config);
     }).not.toThrow();
   });
+
+  it("registers the reaction_added trigger", () => {
+    const app = new App({
+      token: config.slackBotToken,
+      appToken: config.slackAppToken,
+      socketMode: true,
+      logLevel: LogLevel.ERROR,
+      tokenVerificationEnabled: false,
+    });
+    const eventSpy = vi.spyOn(app, "event");
+    registerHandlers(app, config);
+    expect(eventSpy).toHaveBeenCalledWith(
+      "reaction_added",
+      expect.any(Function),
+    );
+  });
 });
