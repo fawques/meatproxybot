@@ -1,0 +1,17 @@
+# Lets agents download Playwright's browsers, so they can check UI changes
+# in a real browser: `npx playwright install --with-deps chromium`.
+# The stock policy already allows Debian's mirrors for --with-deps and
+# Playwright's older download host, playwright.azureedge.net.
+schemaVersion: "2"
+kind: mixin
+name: playwright
+requires:
+  agent: claude
+description: Network access for downloading Playwright's browsers
+
+# Whole hosts: a kit cannot restrict a rule to methods or paths.
+permissions:
+  network:
+    allow:
+      - cdn.playwright.dev
+      - playwright.download.prss.microsoft.com

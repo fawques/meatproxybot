@@ -1,0 +1,30 @@
+# What meatproxybot agents need beyond the stock claude sandbox, which
+# already ships Node 22, gh and git and is allowed to reach GitHub, npm and
+# Anthropic: Linear access. Add the project's toolchain here once it has one.
+schemaVersion: "2"
+kind: mixin
+name: meatproxybot
+requires:
+  agent: claude
+description: Linear access for Symphony-driven meatproxybot agents
+
+# The proxy swaps the real key in on the way out; inside the VM,
+# LINEAR_API_KEY is only a placeholder, so an agent cannot exfiltrate it.
+# Linear personal API keys go in the header bare, without "Bearer".
+credentials:
+  - service: linear
+    description: Linear API key for the Symphony tracker
+    required: true
+    apiKey:
+      name: LINEAR_API_KEY
+      proxyManaged: true
+      inject:
+        - domain: api.linear.app
+          header: Authorization
+          format: "%s"
+
+permissions:
+  network:
+    allow:
+      - api.linear.app
+      - mcp.linear.app

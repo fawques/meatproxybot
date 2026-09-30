@@ -1,0 +1,148 @@
+# Installs the Symphony orchestrator (symphony-claude) in the sandbox, so
+# `symphony WORKFLOW.md` works on any sandbox built from sbxenv.yaml.
+# A supervisor started on every boot runs it and keeps WORKFLOW.md on main.
+schemaVersion: "2"
+kind: mixin
+name: symphony
+requires:
+  agent: claude
+description: Builds symphony-claude and puts `symphony` on PATH
+
+setup:
+  install:
+    # Once, at create (or `sbx kit add`), as the agent user. Bumping REV
+    # therefore means recreating the sandbox. Inline rather than a files/
+    # script because `sbx kit add` does not apply kit files yet.
+    #
+    # symphony-claude is not on npm (the `symphony` package there is an
+    # unrelated React library), so it is built from a reviewed commit. The
+    # stock claude policy already allows GitHub and the npm registry.
+    - user: "1000"
+      description: Build symphony-claude from its pinned commit
+      command: |
+        set -eu
+        REV=3d6fa1adc27c45570ea70cf147786dfb205a3128
+        DIR=/home/agent/.local/share/symphony-claude
+        if [ "$(git -C "$DIR" rev-parse HEAD 2>/dev/null)" != "$REV" ] || [ ! -f "$DIR/dist/index.js" ]; then
+          rm -rf "$DIR"
+          git clone --quiet https://github.com/mscalessio/symphony-claude.git "$DIR"
+          git -C "$DIR" checkout --quiet "$REV"
+          cd "$DIR" && npm ci --no-audit --no-fund && npm run build
+        fi
+        mkdir -p /home/agent/.local/bin
+        printf '#!/bin/sh\nexec node %s/dist/index.js "$@"\n' "$DIR" > /home/agent/.local/bin/symphony
+        chmod 755 /home/agent/.local/bin/symphony
+
+    # Runs Symphony from the startup hook below; see the script's header.
+    - user: "1000"
+      description: Install the Symphony supervisor
+      command: |
+        set -eu
+        mkdir -p /home/agent/.local/bin
+        cat > /home/agent/.local/bin/symphony-supervisor <<'SCRIPT'
+        #!/bin/bash
+        # Keeps Symphony running on the sandbox's clone, and that clone on
+        # origin/main. Restarts Symphony when WORKFLOW.md changes, but only once no
+        # agent is running, so no turn is cut off. Output goes to ~/symphony.log.
+        # SYMPHONY_LOG and SYMPHONY_SUPERVISOR_INTERVAL override the defaults for
+        # a test run against a scratch clone.
+        set -u
+
+        REPO=${WORKSPACE_DIR:?WORKSPACE_DIR is not set}
+        LOG=${SYMPHONY_LOG:-$HOME/symphony.log}
+        INTERVAL=${SYMPHONY_SUPERVISOR_INTERVAL:-60}
+
+        pid=
+        port=
+        running_workflow=
+
+        log() { printf '[%s] supervisor: %s\n' "$(date '+%F %T')" "$*" >>"$LOG"; }
+
+        start() {
+          if [ -f "$LOG" ] && [ "$(stat -c %s "$LOG")" -gt 10485760 ]; then
+            mv -f "$LOG" "$LOG.1"
+          fi
+          running_workflow=$(git -C "$REPO" hash-object WORKFLOW.md)
+          port=$(awk '/^server:/ { s = 1 } s && $1 == "port:" { print $2; exit }' "$REPO/WORKFLOW.md")
+          log "starting Symphony on $(git -C "$REPO" rev-parse --short HEAD)"
+          (cd "$REPO" && exec symphony WORKFLOW.md) >>"$LOG" 2>&1 &
+          pid=$!
+        }
+
+        stop() {
+          kill -TERM "$pid" 2>/dev/null
+          for _ in $(seq 30); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          kill -KILL "$pid" 2>/dev/null
+          wait "$pid" 2>/dev/null
+        }
+
+        # No agent running, claimed or waiting to retry.
+        idle() {
+          curl -fsS -m 5 "http://127.0.0.1:$port/api/v1/state" 2>/dev/null |
+            jq -e '(.running | length) + (.claimed | length) + (.retry_queue | length) == 0' >/dev/null
+        }
+
+        # Pull main, fast-forward only: a diverged or dirty clone is left alone.
+        update() {
+          if [ "$(git -C "$REPO" symbolic-ref --short -q HEAD)" != main ]; then
+            log "clone is not on main; not updating it"
+            return
+          fi
+          git -C "$REPO" fetch -q origin main 2>>"$LOG" || { log "fetch failed"; return; }
+          if ! git -C "$REPO" merge -q --ff-only origin/main >>"$LOG" 2>&1; then
+            log "cannot fast-forward the clone to origin/main; resolve it by hand"
+          fi
+        }
+
+        trap 'stop; exit 0' TERM INT
+
+        # A new sandbox has no Claude login until /login is run in it.
+        until [ -f "$REPO/WORKFLOW.md" ] && claude auth status 2>/dev/null | jq -e .loggedIn >/dev/null; do
+          sleep "$INTERVAL"
+        done
+
+        update
+        start
+        while sleep "$INTERVAL" & wait $!; do
+          if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid" 2>/dev/null
+            log "Symphony exited with status $?; restarting"
+            start
+            continue
+          fi
+          update
+          if [ "$(git -C "$REPO" hash-object WORKFLOW.md)" != "$running_workflow" ] && idle; then
+            log "WORKFLOW.md changed; restarting Symphony"
+            stop
+            start
+          fi
+        done
+        SCRIPT
+        chmod 755 /home/agent/.local/bin/symphony-supervisor
+
+  startup:
+    # Every boot. Symphony binds its dashboard to 127.0.0.1 with no option
+    # to change it, and sbx delivers published ports to the VM's network
+    # interface, not its loopback. This relay carries them across:
+    # host 127.0.0.1:4547 -> sandbox 4548 -> Symphony on 127.0.0.1:4547
+    # (server.port in WORKFLOW.md). Harmless while Symphony is stopped.
+    - user: "1000"
+      background: true
+      description: Relay the Symphony dashboard off the VM's loopback
+      command:
+        - socat
+        - TCP-LISTEN:4548,fork,reuseaddr,bind=0.0.0.0
+        - TCP:127.0.0.1:4547
+
+    # Every boot. Starts Symphony once Claude is logged in, keeps the
+    # sandbox's clone fast-forwarded to origin/main, and restarts Symphony
+    # when WORKFLOW.md changes and no agent is running. Logs to
+    # ~/symphony.log. Do not also run `symphony` by hand.
+    - user: "1000"
+      background: true
+      description: Supervise Symphony and keep its workflow on main
+      command:
+        - /home/agent/.local/bin/symphony-supervisor

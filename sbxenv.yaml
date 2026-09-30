@@ -1,0 +1,42 @@
+# Docker Sandboxes (sbx) environment for unattended meatproxybot agents.
+# Each sandbox is a microVM: Symphony runs agents with bypassed permissions
+# in here, never on the host. See sandbox/README.md.
+#
+#   sbx env run            # create if needed, then attach to claude
+#   sbx env exec -- bash   # shell in the sandbox
+#   sbx env rm             # tear down, including the secrets below
+schemaVersion: 1
+name: meatproxybot-agents
+agent: claude
+
+kits:
+  - ./sandbox/kits/meatproxybot
+  - ./sandbox/kits/symphony
+  - ./sandbox/kits/playwright
+
+# A private clone rather than a bind mount: untracked files such as .env
+# stay on the host, and agents' commits come back through the
+# sandbox-meatproxybot-agents git remote instead of landing in this working tree.
+workspace:
+  path: .
+  clone: true
+
+# Resolved on the host and injected by the sandbox proxy; the values never
+# enter the VM. The Linear key lives in sbx's own store, set once per machine:
+#   sbx secret set linear
+secrets:
+  github:
+    command: gh auth token
+
+# Lets the proxy send the stored Linear key to Linear's API and nowhere else.
+bindings:
+  linear:
+    apiKey:
+      domains:
+        - api.linear.app
+
+# Symphony's dashboard (server.port in WORKFLOW.md), host loopback only.
+ports:
+  - sandbox: 4548   # the kit's relay to Symphony, which only listens on the VM's loopback
+    host: 4547
+    hostIP: 127.0.0.1
