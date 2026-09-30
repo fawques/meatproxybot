@@ -48,6 +48,11 @@ setup:
         # a test run against a scratch clone.
         set -u
 
+        # Startup hooks run without a login shell, so ~/.local/bin (claude,
+        # symphony) is not on PATH; without this the login check below fails
+        # silently forever.
+        export PATH="/home/agent/.local/bin:/usr/local/share/npm-global/bin:$PATH"
+
         REPO=${WORKSPACE_DIR:?WORKSPACE_DIR is not set}
         LOG=${SYMPHONY_LOG:-$HOME/symphony.log}
         INTERVAL=${SYMPHONY_SUPERVISOR_INTERVAL:-60}
@@ -123,6 +128,48 @@ setup:
         SCRIPT
         chmod 755 /home/agent/.local/bin/symphony-supervisor
 
+    # Serves the supervisor's log over HTTP, see the startup hook below.
+    - user: "1000"
+      description: Install the Symphony log server
+      command: |
+        set -eu
+        mkdir -p /home/agent/.local/bin
+        cat > /home/agent/.local/bin/symphony-logs <<'SCRIPT'
+        // Serves ~/symphony.log read-only on sandbox port 4549, published to
+        // the host, so the log can be read without `sbx env exec`: sbx
+        // auto-stops the sandbox once its last exec session ends.
+        //   GET /symphony.log[?lines=N]   GET /symphony.log.1[?lines=N]
+        const http = require('node:http');
+        const fs = require('node:fs');
+        const path = require('node:path');
+
+        const DIR = '/home/agent';
+        const FILES = new Set(['symphony.log', 'symphony.log.1']);
+
+        http
+          .createServer((req, res) => {
+            const url = new URL(req.url, 'http://localhost');
+            const name = url.pathname.slice(1);
+            if (req.method !== 'GET' || !FILES.has(name)) {
+              res.writeHead(404, { 'content-type': 'text/plain' });
+              res.end('GET /symphony.log[?lines=N] or /symphony.log.1[?lines=N]\n');
+              return;
+            }
+            fs.readFile(path.join(DIR, name), 'utf8', (err, text) => {
+              if (err) {
+                res.writeHead(404, { 'content-type': 'text/plain' });
+                res.end(`${name}: ${err.code}\n`);
+                return;
+              }
+              const lines = Number(url.searchParams.get('lines'));
+              if (lines > 0) text = text.split('\n').slice(-lines - 1).join('\n');
+              res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+              res.end(text);
+            });
+          })
+          .listen(4549, '0.0.0.0');
+        SCRIPT
+
   startup:
     # Every boot. Symphony binds its dashboard to 127.0.0.1 with no option
     # to change it, and sbx delivers published ports to the VM's network
@@ -146,3 +193,14 @@ setup:
       description: Supervise Symphony and keep its workflow on main
       command:
         - /home/agent/.local/bin/symphony-supervisor
+
+    # Every boot. Serves ~/symphony.log on sandbox port 4549, which
+    # sbxenv.yaml publishes to host 127.0.0.1:4548. A login shell, because
+    # startup hooks do not get the login PATH that node may need.
+    - user: "1000"
+      background: true
+      description: Serve the Symphony log to the host
+      command:
+        - bash
+        - -lc
+        - exec node /home/agent/.local/bin/symphony-logs

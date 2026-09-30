@@ -74,10 +74,21 @@ merge changes `WORKFLOW.md`, it restarts Symphony, but only once no agent is
 running, claimed or waiting to retry, so no turn is cut off. It also
 restarts Symphony if it exits.
 
+Check on it from the host:
+
 ```sh
-sbx env exec -- tail -f /home/agent/symphony.log # follow Symphony and the supervisor
-sbx env exec -- pkill -f symphony-supervisor     # stop Symphony until the next boot
+curl -s '127.0.0.1:4548/symphony.log?lines=100' # Symphony and supervisor log (the kit serves it)
+curl -s 127.0.0.1:4548/symphony.log.1           # the previous log, once it rotated at 10 MB
+curl -s 127.0.0.1:4547/api/v1/state             # running, claimed and retrying issues
 ```
+
+Avoid `sbx env exec` on a sandbox that should keep running. It opens a
+session, and sbx (v0.45.1) auto-stops the sandbox 30 seconds after its last
+session disconnects, agents included; a sandbox started with `sbx env run -d`
+has no session and stays up only until the first `exec` ends. If one did stop
+it, wait until `sbx ls` shows it stopped before `sbx env run -d`: a restart
+inside the 30-second grace period is stopped again when it expires. To stop
+Symphony until the next boot, `sbx stop meatproxybot-agents`.
 
 Do not also run `symphony WORKFLOW.md` by hand: a second instance would
 fight the first over the dashboard port and dispatch the same issues. The
@@ -126,14 +137,15 @@ The dashboard is published to <http://127.0.0.1:4547>
 sandbox on 4545 and the Tria one on 4546). Symphony only listens on the VM's
 loopback, which a published port cannot reach, so the `symphony` kit starts
 a `socat` relay on every boot from sandbox port 4548 to it; `sbxenv.yaml`
-publishes 4548.
+publishes 4548. The kit also serves `~/symphony.log` on sandbox port 4549,
+published to host `127.0.0.1:4548`.
 
 ## Day to day
 
 ```sh
 sbx ls                               # is meatproxybot-agents running?
 sbx env run -d                       # start it, detached; Symphony starts on its own
-sbx env exec -- bash                 # shell in the sandbox
+sbx env exec -- bash                 # shell in the sandbox; the sandbox auto-stops 30 s after you exit
 sbx env run                          # attach to Claude interactively
 sbx stop meatproxybot-agents         # stop, keeping its state
 git fetch sandbox-meatproxybot-agents # bring back commits made in the sandbox's own clone
@@ -172,10 +184,16 @@ removal deletes it.
   at creation, so after bumping its pinned commit, recreate the sandbox.
 - *`npx playwright install` is blocked*: the sandbox predates the
   `playwright` kit. Add it in place: `sbx kit add meatproxybot-agents ./sandbox/kits/playwright`.
-- *Symphony is not running* (dashboard unreachable): read
-  `/home/agent/symphony.log`. With no supervisor lines, Claude is not logged
-  in yet (run `/login` in `sbx env run`) or the sandbox predates the
-  supervisor; recreate it.
+- *The sandbox keeps stopping by itself*: an `sbx env exec` session ended;
+  see [Run Symphony](#run-symphony). `grep auto-stop` in
+  `~/Library/Application Support/com.docker.sandboxes/sandboxes/sandboxd/daemon.log`
+  shows it.
+- *Symphony is not running* (dashboard unreachable): read the log with
+  `curl -s 127.0.0.1:4548/symphony.log`. With no supervisor lines, Claude is
+  not logged in yet (run `/login` in `sbx env run`), or the sandbox predates
+  the supervisor or its `PATH` fix (`claude` not found under the startup
+  hook's `PATH`); recreate it. If port 4548 does not answer either, the
+  sandbox predates the log server; recreate it.
 - *Merged `WORKFLOW.md` changes are not picked up*: the log says why, such
   as the clone not being on `main` or not fast-forwarding.
 - *`npx symphony` fails*: it fetched the unrelated npm package; use `symphony`.
