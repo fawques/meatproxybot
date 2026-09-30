@@ -53,6 +53,30 @@ excluded from the build context, so tokens never end up in the image; pass
 them at run time. Without them the container exits with status 1 and logs
 which variables are missing.
 
+## Usage
+
+### Message shortcut (anonymous)
+
+Hover over a message, open its _More actions_ (⋮) menu and choose
+_🥩 Call out meat proxy_. (The first time, it may be under _More message
+shortcuts…_.) The bot posts a callout in the message's thread and adds
+`:meat_proxy:`. Nobody sees who triggered it: only you get a reply, an
+ephemeral one, and you get one on success too, so a failure is never
+mistaken for success:
+
+| Reply                                         | Meaning                                   |
+| --------------------------------------------- | ----------------------------------------- |
+| 🥩 Called out. Nobody knows it was you.       | The callout was posted.                   |
+| Already called out, it's on the record.       | The message was called out before.        |
+| I only work in channels, not DMs.             | The message is in a DM or group DM.       |
+| Nice try, I'm not calling myself out.         | The message is the bot's own.             |
+| Invite me to this channel first (`/invite …`) | The bot is not in the channel.            |
+| Couldn't call that out, sorry.                | Anything else; the reason is in the logs. |
+
+The only record of who triggered a callout is the bot's stdout audit log.
+If the bot isn't in the channel it may not be able to reply at all; the
+failure is logged.
+
 ## Agents
 
 Issues in the Linear project
