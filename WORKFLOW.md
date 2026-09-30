@@ -123,9 +123,10 @@ Symphony provides a `linear_graphql` MCP tool to each agent session. Use it to r
 - When meaningful out-of-scope improvements are discovered during execution,
   file a separate Linear issue instead of expanding scope. The follow-up issue
   must include a clear title, description, and acceptance criteria, be placed in
-  `Backlog`, be assigned to the same project as the current issue, link the
-  current issue as `related`, and use `blockedBy` when the follow-up depends on
-  the current issue.
+  `Todo` so an agent picks it up, be assigned to the same project as the current
+  issue, link the current issue as `related`, and use `blockedBy` when the
+  follow-up depends on the current issue (Symphony holds a `Todo` issue until
+  all its blockers are done).
 - Move status only when the matching quality bar is met.
 - Operate autonomously end-to-end unless blocked by missing requirements, secrets, or permissions.
 - Use the blocked-access escape hatch only for true external blockers (missing required tools/auth) after exhausting documented fallbacks.
@@ -363,7 +364,7 @@ In `In Review` you are the reviewer, not the implementer: do not change code, co
 - Do not edit the issue body/description for planning or progress tracking.
 - Use exactly one persistent workpad comment (`## Workpad`) per issue.
 - Temporary proof edits are allowed only for local verification and must be reverted before commit.
-- If out-of-scope improvements are found, create a separate Backlog issue rather
+- If out-of-scope improvements are found, create a separate `Todo` issue rather
   than expanding current scope, and include a clear
   title/description/acceptance criteria, same-project assignment, a `related`
   link to the current issue, and `blockedBy` when the follow-up depends on the
