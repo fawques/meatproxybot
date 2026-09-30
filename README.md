@@ -9,7 +9,7 @@ adds `:meat_proxy:`. It runs in Socket Mode, so it needs no public URL.
 
 ## Setup
 
-You need Node 22 or later and a Slack workspace where you can create apps.
+You need Node 22.9 or later and a Slack workspace where you can create apps.
 
 1. **Create the Slack app from `manifest.yml`.** At
    <https://api.slack.com/apps>, choose _Create New App_ → _From a

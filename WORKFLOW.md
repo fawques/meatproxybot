@@ -100,7 +100,7 @@ Work only in the provided repository copy. Do not touch any other path.
 ## meatproxybot repository facts
 
 - Default branch is `main`. Branch from `origin/main` and name branches `{{ issue.identifier | downcase }}-<short-slug>`.
-- Stack: TypeScript on Node 22 with `@slack/bolt` in Socket Mode, Vitest, ESLint and Prettier. `npm ci` installs it (the `after_create` hook runs it).
+- Stack: TypeScript on Node 22.9+ with `@slack/bolt` in Socket Mode, Vitest, ESLint and Prettier. `npm ci` installs it (the `after_create` hook runs it).
 - Required validation before every push: `npm run lint && npm run typecheck && npm test` (CI also runs `npm run build`). Tests use a mocked Slack client; agents get no Slack secrets, and the human smoke-tests in a real workspace.
 - User-facing changes: verify the flow in a browser (Playwright if available) and attach a screenshot to the workpad.
 - Never commit secrets or `.env`.
