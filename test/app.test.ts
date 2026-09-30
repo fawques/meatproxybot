@@ -38,4 +38,17 @@ describe("registerHandlers", () => {
       registerHandlers(app, config);
     }).not.toThrow();
   });
+
+  it("registers the /meatproxy slash command", () => {
+    const app = new App({
+      token: config.slackBotToken,
+      appToken: config.slackAppToken,
+      socketMode: true,
+      logLevel: LogLevel.ERROR,
+      tokenVerificationEnabled: false,
+    });
+    const command = vi.spyOn(app, "command");
+    registerHandlers(app, config);
+    expect(command).toHaveBeenCalledWith("/meatproxy", expect.any(Function));
+  });
 });
