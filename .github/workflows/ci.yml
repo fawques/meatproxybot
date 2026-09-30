@@ -26,3 +26,17 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t meatproxybot .
+      - name: Runs as a non-root user
+        run: test "$(docker run --rm --entrypoint id meatproxybot -u)" != 0
+      - name: Exits non-zero without configuration
+        run: |
+          if docker run --rm meatproxybot; then
+            echo "expected a non-zero exit without SLACK_* env" >&2
+            exit 1
+          fi
