@@ -38,6 +38,21 @@ npm run lint && npm run typecheck && npm test
 
 Tests never connect to Slack and need no Slack tokens.
 
+### Run with Docker
+
+The bot only makes outbound connections, so the container exposes no port.
+With `.env` filled in (step 5 above):
+
+```sh
+docker build -t meatproxybot .
+docker run --rm --env-file .env meatproxybot
+```
+
+The image runs the compiled bot as the unprivileged `node` user. `.env` is
+excluded from the build context, so tokens never end up in the image; pass
+them at run time. Without them the container exits with status 1 and logs
+which variables are missing.
+
 ## Agents
 
 Issues in the Linear project
