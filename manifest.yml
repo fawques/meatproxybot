@@ -1,0 +1,39 @@
+# Slack app manifest for meatproxybot. Create the app from this file at
+# https://api.slack.com/apps -> Create New App -> From a manifest.
+# It declares everything the MVP needs, so the app is created once.
+display_information:
+  name: meatproxybot
+  description: Calls out messages pasted from an AI without being read.
+  background_color: "#8b1a1a"
+features:
+  bot_user:
+    display_name: meatproxybot
+    always_online: true
+  slash_commands:
+    - command: /meatproxy
+      description: Call out a message as unread AI output
+      usage_hint: <message link>
+      should_escape: false
+  shortcuts:
+    - name: "🥩 Call out meat proxy"
+      type: message
+      callback_id: call_out_meat_proxy
+      description: Call out this message as unread AI output
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - reactions:read
+      - reactions:write
+      - commands
+      - channels:history
+      - groups:history
+settings:
+  event_subscriptions:
+    bot_events:
+      - reaction_added
+  interactivity:
+    is_enabled: true
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
