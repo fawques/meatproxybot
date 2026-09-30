@@ -1,4 +1,5 @@
 import { App, LogLevel } from "@slack/bolt";
+import { COMMAND, handleMeatproxyCommand } from "./command.js";
 import type { Config } from "./config.js";
 import { registerReactionTrigger } from "./reactionTrigger.js";
 import { registerShortcut } from "./shortcut.js";
@@ -30,7 +31,7 @@ export function createApp(config: Config, options: CreateAppOptions = {}): App {
 
 /**
  * Registers every trigger (reaction, message shortcut, slash command) on the
- * app. The slash command trigger is added by a later ticket.
+ * app.
  */
 export function registerHandlers(app: App, config: Config): void {
   app.logger.debug(
@@ -38,4 +39,5 @@ export function registerHandlers(app: App, config: Config): void {
   );
   registerReactionTrigger(app, config);
   registerShortcut(app);
+  app.command(COMMAND, (args) => handleMeatproxyCommand(args));
 }

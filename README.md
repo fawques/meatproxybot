@@ -91,6 +91,20 @@ The only record of who triggered a callout is the bot's stdout audit log.
 If the bot isn't in the channel it may not be able to reply at all; the
 failure is logged.
 
+### `/meatproxy <message link>`
+
+Calls out a message anonymously from the keyboard. Open the message's
+_More actions_ (⋮) menu, or right-click it, choose _Copy link_, then run
+`/meatproxy <link>` in any channel. The bot calls out the linked message in
+its thread and replies to you alone, ephemerally, with the same replies as
+the shortcut. Nobody else sees that you ran it; you only appear in the bot's
+audit log.
+
+- The link is required: `/meatproxy` alone, or `/meatproxy help`, shows
+  usage instead of guessing a message.
+- Links to public and private channel messages and thread replies work. DM
+  links do not, and the bot must be in the message's channel.
+
 ## Agents
 
 Issues in the Linear project
