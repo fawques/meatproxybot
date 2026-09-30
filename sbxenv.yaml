@@ -40,3 +40,6 @@ ports:
   - sandbox: 4548   # the kit's relay to Symphony, which only listens on the VM's loopback
     host: 4547
     hostIP: 127.0.0.1
+  - sandbox: 4549   # the kit's server for ~/symphony.log, readable without an exec session
+    host: 4548
+    hostIP: 127.0.0.1
