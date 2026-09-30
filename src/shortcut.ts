@@ -1,5 +1,6 @@
 import type { App, webApi } from "@slack/bolt";
 import { callOut as defaultCallOut, type CallOutResult } from "./callOut.js";
+import { feedbackText } from "./feedback.js";
 
 /** The message shortcut's callback_id, declared in manifest.yml. */
 export const SHORTCUT_CALLBACK_ID = "call_out_meat_proxy";
@@ -7,26 +8,6 @@ export const SHORTCUT_CALLBACK_ID = "call_out_meat_proxy";
 export interface RegisterShortcutOptions {
   /** The callout service, injectable for tests. */
   callOut?: typeof defaultCallOut;
-}
-
-/** The ephemeral feedback the invoker gets for a callOut result. */
-export function feedbackText(result: CallOutResult): string {
-  if (result.status === "posted") {
-    return "🥩 Called out. Nobody knows it was you.";
-  }
-  if (result.status === "already") {
-    return "Already called out, it's on the record.";
-  }
-  switch (result.reason) {
-    case "dm":
-      return "I only work in channels, not DMs.";
-    case "own_message":
-      return "Nice try, I'm not calling myself out.";
-    case "not_in_channel":
-      return "Invite me to this channel first (`/invite @meatproxybot`).";
-    default:
-      return "Couldn't call that out, sorry.";
-  }
 }
 
 /**

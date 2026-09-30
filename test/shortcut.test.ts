@@ -1,11 +1,8 @@
 import type { App } from "@slack/bolt";
 import { describe, expect, it, vi } from "vitest";
 import type { CallOutOptions, CallOutResult } from "../src/callOut.js";
-import {
-  feedbackText,
-  registerShortcut,
-  SHORTCUT_CALLBACK_ID,
-} from "../src/shortcut.js";
+import { feedbackText } from "../src/feedback.js";
+import { registerShortcut, SHORTCUT_CALLBACK_ID } from "../src/shortcut.js";
 
 const BOT = "UBOT";
 const INVOKER = "UINVOKER";
