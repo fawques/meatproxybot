@@ -1,0 +1,41 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark red background -->
+  <rect width="1024" height="1024" fill="#8b1a1a"/>
+
+  <!-- Meat shape (stylized cut) -->
+  <g transform="translate(250, 200)">
+    <!-- Main meat form -->
+    <ellipse cx="260" cy="280" rx="180" ry="220" fill="#d9534f" opacity="0.9"/>
+    <circle cx="180" cy="200" r="100" fill="#d9534f" opacity="0.9"/>
+    <circle cx="340" cy="180" r="110" fill="#d9534f" opacity="0.9"/>
+
+    <!-- Marbling texture -->
+    <circle cx="240" cy="280" r="30" fill="#c0392b" opacity="0.7"/>
+    <circle cx="280" cy="320" r="20" fill="#c0392b" opacity="0.7"/>
+    <ellipse cx="200" cy="220" rx="35" ry="20" fill="#c0392b" opacity="0.7" transform="rotate(-30 200 220)"/>
+    <circle cx="320" cy="250" r="25" fill="#c0392b" opacity="0.7"/>
+  </g>
+
+  <!-- Paste symbol (document with dashed border indicating paste) -->
+  <g transform="translate(550, 450)">
+    <!-- Document outline -->
+    <rect x="0" y="0" width="140" height="180" fill="none" stroke="#e8e8e8" stroke-width="8" rx="10"/>
+
+    <!-- Document fold corner -->
+    <polygon points="140,0 140,40 100,0" fill="#e8e8e8"/>
+
+    <!-- Paste indicator (dashed lines) -->
+    <line x1="15" y1="60" x2="125" y2="60" stroke="#e8e8e8" stroke-width="6" stroke-dasharray="12,8"/>
+    <line x1="15" y1="95" x2="125" y2="95" stroke="#e8e8e8" stroke-width="6" stroke-dasharray="12,8"/>
+    <line x1="15" y1="130" x2="125" y2="130" stroke="#e8e8e8" stroke-width="6" stroke-dasharray="12,8"/>
+
+    <!-- Arrow indicating action -->
+    <g transform="translate(70, 170)">
+      <path d="M -20 0 L 20 0 M 10 -10 L 20 0 L 10 10" stroke="#e8e8e8" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+
+  <!-- Badge indicator -->
+  <circle cx="800" cy="150" r="80" fill="#2ecc71" opacity="0.9"/>
+  <text x="800" y="170" font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle">!</text>
+</svg>

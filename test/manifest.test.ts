@@ -15,11 +15,38 @@ interface Manifest {
     event_subscriptions: { bot_events: string[]; request_url: string };
     slash_commands_url: string;
   };
+  display_information: {
+    name: string;
+    description: string;
+    long_description?: string;
+    background_color: string;
+  };
 }
 
 const manifest = parse(
   readFileSync(new URL("../manifest.yml", import.meta.url), "utf8"),
 ) as Manifest;
+
+/**
+ * Read PNG dimensions from file buffer
+ */
+function getPNGDimensions(
+  buffer: Buffer,
+): { width: number; height: number } | null {
+  // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+  if (buffer.length < 24) return null;
+  if (
+    !buffer
+      .subarray(0, 8)
+      .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  )
+    return null;
+
+  // IHDR chunk is always first after signature (12 bytes header + 13 bytes data)
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  return { width, height };
+}
 
 describe("manifest.yml", () => {
   it("disables Socket Mode and enables interactivity", () => {
@@ -90,5 +117,49 @@ describe("manifest.yml", () => {
       callback_id: "call_out_meat_proxy",
       description: expect.any(String) as string,
     });
+  });
+
+  it("has a short description with <= 10 words", () => {
+    const wordCount = manifest.display_information.description
+      .trim()
+      .split(/\s+/).length;
+    expect(wordCount).toBeLessThanOrEqual(10);
+  });
+
+  it("has a long_description between 175-4000 characters", () => {
+    const desc = manifest.display_information.long_description || "";
+    expect(desc.length).toBeGreaterThanOrEqual(175);
+    expect(desc.length).toBeLessThanOrEqual(4000);
+  });
+});
+
+describe("marketplace assets", () => {
+  it("icon.png exists with correct dimensions (512-2000px square)", () => {
+    const buffer = readFileSync(
+      new URL("../docs/marketplace/icon.png", import.meta.url),
+    );
+    const dims = getPNGDimensions(buffer);
+    expect(dims).not.toBeNull();
+    expect(dims?.width).toBeGreaterThanOrEqual(512);
+    expect(dims?.width).toBeLessThanOrEqual(2000);
+    expect(dims?.width).toBe(dims?.height);
+  });
+
+  it("each screenshot is 1600x1000 PNG under 2MB", () => {
+    const screenshots = [
+      "screenshot-reaction.png",
+      "screenshot-shortcut.png",
+      "screenshot-slash.png",
+    ];
+
+    for (const name of screenshots) {
+      const buffer = readFileSync(
+        new URL(`../docs/marketplace/${name}`, import.meta.url),
+      );
+      const dims = getPNGDimensions(buffer);
+      expect(dims?.width).toBe(1600);
+      expect(dims?.height).toBe(1000);
+      expect(buffer.length).toBeLessThan(2 * 1024 * 1024); // 2MB
+    }
   });
 });

@@ -1,9 +1,10 @@
 # meatproxybot
 
-don't be a meat proxy
+Nudge teammates to read AI-generated text before they paste it.
 
-A Slack bot that calls out people who paste AI-generated text without
-reading it. Trigger it on a message (a reaction, a message shortcut or a
+A Slack bot that helps catch AI-generated content before it's shared. Trigger it
+by reacting with 🥩, using a message shortcut, or the /meatproxy command to post
+a light-hearted reminder in the thread. Trigger it on a message (a reaction, a message shortcut or a
 slash command) and it posts a canned callout in the message's thread and
 adds 🥩 (`:cut_of_meat:`). It listens on HTTP and requires a public URL.
 

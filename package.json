@@ -2,7 +2,7 @@
   "name": "meatproxybot",
   "version": "0.1.0",
   "private": true,
-  "description": "Slack bot that calls out people who paste AI-generated text without reading it",
+  "description": "Slack bot that nudges teammates to read AI-generated text before they paste it",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
