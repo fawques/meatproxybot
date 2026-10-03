@@ -106,6 +106,7 @@ the image). The deployed instance is always available at
 ### How Deployment Works
 
 The `.github/workflows/deploy.yml` workflow:
+
 1. Builds the Docker image and pushes it to Google Cloud Artifact Registry,
    tagged with the commit SHA.
 2. Calls the reusable deployment workflow from personal-site, which:
