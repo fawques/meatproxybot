@@ -83,7 +83,8 @@ describe("getTriggerEmojiForWorkspace", () => {
     store.setTriggerEmoji("T123", "robot_face");
     const config = {
       slackBotToken: "xoxb-123",
-      slackAppToken: "xapp-456",
+      slackSigningSecret: "secret-123",
+      port: 3000,
       triggerEmoji: "meat_proxy",
       workspaceStore: store,
     };
@@ -94,7 +95,8 @@ describe("getTriggerEmojiForWorkspace", () => {
     const store = new InMemoryWorkspaceStore();
     const config = {
       slackBotToken: "xoxb-123",
-      slackAppToken: "xapp-456",
+      slackSigningSecret: "secret-123",
+      port: 3000,
       triggerEmoji: "meat_proxy",
       workspaceStore: store,
     };
@@ -104,7 +106,8 @@ describe("getTriggerEmojiForWorkspace", () => {
   it("uses global emoji when no workspace store is configured", () => {
     const config = {
       slackBotToken: "xoxb-123",
-      slackAppToken: "xapp-456",
+      slackSigningSecret: "secret-123",
+      port: 3000,
       triggerEmoji: "meat_proxy",
     };
     expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("meat_proxy");
@@ -116,7 +119,8 @@ describe("getTriggerEmojiForWorkspace", () => {
     store.setTriggerEmoji("T456", "tada");
     const config = {
       slackBotToken: "xoxb-123",
-      slackAppToken: "xapp-456",
+      slackSigningSecret: "secret-123",
+      port: 3000,
       triggerEmoji: "meat_proxy",
       workspaceStore: store,
     };
