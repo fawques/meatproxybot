@@ -15,6 +15,9 @@ tracker:
   # grilled issue until you reply and move it back to Grill Me.
   # In Review is active: an agent reviews the PR and moves the issue back to
   # Todo to fix its comments, or on to Merging when nothing is left to fix.
+  # Symphony dispatches by state only. To make agents leave an issue alone,
+  # add the symphony-blocked label: the next agent to see it moves the issue
+  # to Backlog and changes nothing else.
   active_states:
     - Grill Me
     - Todo
@@ -59,6 +62,10 @@ server:
 
 You are working on a Linear ticket `{{ issue.identifier }}`
 
+{% if issue.labels contains "symphony-blocked" %}
+STOP: this issue carries the `symphony-blocked` label, so agents must ignore it. Do not read the code, comment, edit labels or touch any branch or PR. Make exactly one Linear change: move the issue to `Backlog` with the `linear_graphql` MCP tool (Symphony keeps redispatching an issue in an active state, so leaving it where it is would loop). Then end the turn. Ignore every other instruction below.
+{% endif %}
+
 {% if attempt %}
 Continuation context:
 
@@ -94,6 +101,8 @@ Instructions:
 1. This is an unattended orchestration session. Never ask a human to perform follow-up actions.
 2. Only stop early for a true blocker (missing required auth/permissions/secrets). If blocked, record it in the workpad and move the issue according to workflow.
 3. Final message must report completed actions and blockers only. Do not include "next steps for user".
+4. Nobody reads this session's chat. Questions, answers and progress exist only where this workflow puts them on Linear or GitHub; a question asked in chat is never answered.
+5. Symphony runs more turns on this session while the issue stays in an active state, with the fixed prompt "Continue working on … proceed with the implementation". That prompt is not an instruction to implement: start every continuation turn at Step 0 (re-fetch the issue, then follow the flow for its current state and labels).
 
 Work only in the provided repository copy. Do not touch any other path.
 
@@ -160,6 +169,10 @@ Three team labels make it visible in Linear that an agent holds an issue. They a
 - `symphony-already-grilled`: the human confirmed the grilled Scope and Acceptance Criteria. Added on the move to `Backlog` that ends grilling. Never removed.
 - `symphony-implementing`: an agent is implementing the issue. Added as the first Linear action in `Todo` (right after the move to `In Progress`), `In Progress` and `Rework`, including the Todo-with-PR feedback loop. Removed right before every move to `In Review`, to `Backlog` (the blocked-access escape hatch) or to `Done`. `In Review` and `Merging` get no label.
 
+One more label belongs to the human, not to agents:
+
+- `symphony-blocked`: agents must ignore the issue from the moment it appears. An agent never adds or removes it. On seeing it, whether at dispatch or on any re-fetch mid-run, stop the current flow at once, make no other change (no comment, label, commit, push or PR action), move the issue to `Backlog` so Symphony stops redispatching it, and end the turn. The human removes the label and moves the issue back when agents may pick it up again.
+
 Rules:
 
 - Change labels only with `issueAddLabel(id, labelId)` / `issueRemoveLabel(id, labelId)`. Never set `labelIds` through `issueUpdate`: it replaces the issue's whole label set and would drop the human's labels.
@@ -170,30 +183,34 @@ Rules:
 
 ## Step 0: Determine current ticket state and route
 
+Run this step at the start of every turn, including Symphony's continuation turns: the issue may have been moved or relabelled since the last one.
+
 1. Fetch the issue using the `linear_graphql` MCP tool by explicit ticket ID.
-2. Read the current state and labels, then reconcile stale labels left by an interrupted run (see `Linear state labels`):
+2. If it has the `symphony-blocked` label, follow that label's rule (see `Linear state labels`) and do nothing else.
+3. Read the current state and labels, then reconcile stale labels left by an interrupted run (see `Linear state labels`):
    - Remove `symphony-grilling` if the state is not `Grill Me`.
    - Remove `symphony-implementing` if the state is not `Todo`, `In Progress` or `Rework`.
-   - Never touch `symphony-already-grilled` or any other label.
-3. Route to the matching flow:
+   - Never touch `symphony-already-grilled`, `symphony-blocked` or any other label.
+4. Remember the state you routed on: it is the only state whose flow you may run this turn. The one exception is the `Todo` -> `In Progress` kickoff move, which continues the same flow. Every other state change you make ends your turn: make it your last action, and never carry on into the next state's flow (an implementer that moves an issue to `In Review` must not review or merge its own PR). Before every state change, every `git push` and every PR action, re-fetch the issue's state and labels. If `symphony-blocked` has appeared, follow its rule. If the state is not the one you routed on (or `In Progress` after your own kickoff move), a human moved it: make no further changes and end the turn (the next turn, if any, starts again at this step).
+5. Route to the matching flow:
    - `Backlog` -> do not modify issue content/state; stop and wait for human to move it to `Todo`.
-   - `Grill Me` -> follow the grill flow below and skip every other step, including step 4.
+   - `Grill Me` -> follow the grill flow below and skip every other step, including steps 6 to 8.
    - `Todo` -> immediately move to `In Progress`, add `symphony-implementing`, then ensure bootstrap workpad comment exists (create if missing), then start execution flow.
      - If PR is already attached, start by reviewing all open PR comments and deciding required changes vs explicit pushback responses.
    - `In Progress` -> add `symphony-implementing`, then continue execution flow from current workpad comment.
-   - `In Review` -> follow the review flow (Step 3) and skip steps 4 and 5. Do not change code.
+   - `In Review` -> follow the review flow (Step 3) and skip steps 6 to 8. Do not change code.
    - `Merging` -> follow the `land` skill flow; do not call `gh pr merge` directly.
    - `Rework` -> add `symphony-implementing`, then run rework flow.
    - `Done` -> do nothing and shut down.
-4. Check whether a PR already exists for the current branch and whether it is closed.
+6. Check whether a PR already exists for the current branch and whether it is closed.
    - If a branch PR exists and is `CLOSED` or `MERGED`, treat prior branch work as non-reusable for this run.
    - Create a fresh branch from `origin/main` and restart execution flow as a new attempt.
-5. For `Todo` tickets, do startup sequencing in this exact order:
+7. For `Todo` tickets, do startup sequencing in this exact order:
    - Update issue state to `In Progress` via `linear_graphql`
    - Add the `symphony-implementing` label
    - Find/create `## Workpad` bootstrap comment
    - Only then begin analysis/planning/implementation work.
-6. Add a short comment if state and issue content are inconsistent, then proceed with the safest flow.
+8. Add a short comment if state and issue content are inconsistent, then proceed with the safest flow.
 
 ## Grill flow (Grill Me)
 
@@ -204,11 +221,11 @@ Run the `grilling` skill (`.claude/skills/grilling`) on the ticket. The skill de
    - Put a callout at the top of the `## Grill` comment, right under the header, that mentions that user by their profile `url` (a Linear profile link renders as a mention), for example: `> ⚠️ <url> This issue was already grilled and its criteria confirmed. Grilling again; the new round may change the agreed Scope and Acceptance Criteria.` Keep a single callout; update it on later rounds rather than adding another.
 1. Keep every round in a single persistent comment headed `## Grill`, found or created the same way as the workpad (reuse an unresolved one; never create a second). Edit it in place: the current round's questions in the skill's format, and below them an `### Answered` log of each earlier question and the human's reply. It is the only comment you write during grilling. Do not create a `## Workpad` comment and do not edit the issue description.
 2. Each run is one round. Read the issue, every comment (including replies in the `## Grill` thread) and the code the ticket touches, then record the new answers in `### Answered` and recompute the frontier.
-3. Where the skill says to wait for the user's answers, remove `symphony-grilling`, move the issue to `Awaiting Answers` instead, then end the turn. The human replies and moves it back to `Grill Me` for the next round.
+3. Where the skill says to wait for the user's answers, write the questions into the `## Grill` comment (never only into the chat, which nobody reads), remove `symphony-grilling`, move the issue to `Awaiting Answers` instead, then end the turn. The human replies and moves it back to `Grill Me` for the next round. Never end a turn with the issue still in `Grill Me`: Symphony would start another turn on the same session.
 4. When the frontier is empty, write `### Scope` and an `### Acceptance Criteria` checklist (with how each criterion is validated) into the `## Grill` comment, ask the human to confirm them, remove `symphony-grilling`, and move the issue to `Awaiting Answers`.
 5. When the human has confirmed the Scope and Acceptance Criteria, add `symphony-already-grilled`, remove `symphony-grilling`, and move the issue to `Backlog`. The human moves it to `Todo` when they want it worked.
-6. No code, branch or PR during grilling.
-7. Change state only as your last action: moving the issue out of `Grill Me` stops this session, so anything after it is lost. That is why every label change comes before the state change.
+6. No code, branch, PR or workpad during grilling, and no move to any state but `Awaiting Answers` or `Backlog`. A ticket that looks clear enough to implement is still grilled: if the frontier is empty from the start, go straight to step 4. Only the human moves an issue from grilling to `Todo`.
+7. Change state only as your last action, then end the turn. Symphony checks the state only between turns, so the session keeps running until you end the turn; anything you do after the move happens outside the grill flow. That is why every label change comes before the state change.
 
 ## Step 1: Start/continue execution (Todo or In Progress)
 
@@ -306,7 +323,7 @@ Use this only when completion is blocked by missing required tools or missing au
     - Confirm every required ticket-provided validation/test-plan item is explicitly marked complete in the workpad.
     - Repeat this check-address-verify loop until no outstanding comments remain and checks are fully passing.
     - Re-open and refresh the workpad before state transition so `Plan`, `Acceptance Criteria`, and `Validation` exactly match completed work.
-12. Only then remove `symphony-implementing` and move issue to `In Review`.
+12. Only then remove `symphony-implementing` and move issue to `In Review`, as your last action: end the turn right after it. The review flow runs in a later turn, never in the one that implemented.
     - Exception: if blocked by missing required non-GitHub tools/auth per the blocked-access escape hatch, remove `symphony-implementing` and move to `Backlog` with the blocker brief and explicit unblock actions.
 13. For `Todo` tickets that already had a PR attached at kickoff:
     - Ensure all existing PR feedback was reviewed and resolved, including inline review comments (code changes or explicit, justified pushback response).
@@ -327,7 +344,7 @@ In `In Review` you are the reviewer, not the implementer: do not change code, co
 4. Do not re-raise a thread that was fixed in code or answered with a justified pushback reply. Re-raise only when the fix is wrong or incomplete, saying why on that thread.
 5. Post all new findings as one GitHub PR review with inline comments on the relevant lines (`gh api repos/fawques/meatproxybot/pulls/<pr>/reviews` with `event: COMMENT`; GitHub rejects `REQUEST_CHANGES` and `APPROVE` from the PR's own author, which the agents' GitHub identity is). Post nothing when there are no new findings.
 6. Add one line to the workpad `Notes`: the review round's time, head short SHA, and the number of new findings and still-open threads.
-7. Decide, then change state as your last action (moving the issue out of `In Review` stops this session, so anything after it is lost):
+7. Decide, then change state as your last action and end the turn (Symphony checks the state only between turns; landing happens in a later turn that is dispatched in `Merging`):
    - New findings, any actionable thread (human or bot) neither fixed nor answered with a justified pushback, or failing checks -> move the issue to `Todo`. The Todo-with-PR flow fixes them and returns it to `In Review`.
    - Otherwise, nothing is left to fix -> move the issue to `Merging`.
 8. When the issue is in `Merging`, follow the `land` skill flow. Do not call `gh pr merge` directly.
