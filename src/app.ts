@@ -18,6 +18,8 @@ export interface CreateAppOptions {
 let globalInstallationStore: PostgresInstallationStore | undefined;
 
 const STATE_TIMEOUT_SECONDS = 600;
+const OAUTH_SCOPES =
+  "chat:write reactions:read reactions:write commands channels:history groups:history";
 
 function generateSignedState(stateSecret: string): string {
   const nonce = randomBytes(16).toString("hex");
@@ -93,6 +95,9 @@ export async function createApp(
   });
 
   if (isOAuthMode && config.databaseUrl) {
+    if (globalInstallationStore) {
+      await globalInstallationStore.close();
+    }
     globalInstallationStore = new PostgresInstallationStore({
       databaseUrl: config.databaseUrl,
       schema: config.databaseSchema,
@@ -126,9 +131,13 @@ export async function createApp(
 
     receiver.router.get("/slack/install", (_req, res) => {
       const state = generateSignedState(stateSecret);
+      const host = _req.headers.host as string;
+      const baseUrl = `https://${host}`;
+      const redirectUri = `${baseUrl}/slack/oauth_redirect`;
       const url =
         `https://slack.com/oauth/v2/authorize?client_id=${clientId}&` +
-        `scope=${encodeURIComponent("chat:write reactions:read reactions:write commands channels:history groups:history")}&` +
+        `scope=${encodeURIComponent(OAUTH_SCOPES)}&` +
+        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `state=${encodeURIComponent(state)}`;
       res.writeHead(302, { Location: url });
       res.end();
@@ -164,39 +173,40 @@ export async function createApp(
 
         if (response.ok && response.team?.id && response.bot_user_id) {
           const store = getGlobalInstallationStore();
-          if (store) {
-            const installation = {
-              app_id: response.app_id,
-              enterprise: undefined,
-              team: { id: response.team.id },
-              bot: {
-                id: undefined,
-                token: response.access_token,
-                scopes: response.scope?.split(" ") ?? [],
-              },
-              bot_user_id: response.bot_user_id,
-            };
-            try {
-              await store.save(installation);
-              app.logger.info(
-                `Saved installation for team ${response.team.id}`,
-              );
-            } catch (saveErr) {
-              const errorMsg =
-                saveErr instanceof Error ? saveErr.message : String(saveErr);
-              app.logger.error(
-                `Failed to save installation for team ${response.team.id}: ${errorMsg}`,
-              );
-              res.writeHead(500, { "Content-Type": "text/plain" });
-              res.end("Failed to save installation");
-              return;
-            }
+          if (!store) {
+            res.writeHead(500, { "Content-Type": "text/plain" });
+            res.end("Installation store not configured");
+            return;
           }
-          res.writeHead(200, { "Content-Type": "text/html" });
-          res.end(
-            "<html><body><h1>Installation successful!</h1>" +
-              "<p>You can close this window.</p></body></html>",
-          );
+          const installation = {
+            app_id: response.app_id,
+            enterprise: undefined,
+            team: { id: response.team.id },
+            bot: {
+              id: undefined,
+              token: response.access_token,
+              scopes: response.scope?.split(" ") ?? [],
+            },
+            bot_user_id: response.bot_user_id,
+          };
+          try {
+            await store.save(installation);
+            app.logger.info(`Saved installation for team ${response.team.id}`);
+            res.writeHead(200, { "Content-Type": "text/html" });
+            res.end(
+              "<html><body><h1>Installation successful!</h1>" +
+                "<p>You can close this window.</p></body></html>",
+            );
+          } catch (saveErr) {
+            const errorMsg =
+              saveErr instanceof Error ? saveErr.message : String(saveErr);
+            app.logger.error(
+              `Failed to save installation for team ${response.team.id}: ${errorMsg}`,
+            );
+            res.writeHead(500, { "Content-Type": "text/plain" });
+            res.end("Failed to save installation");
+            return;
+          }
         } else {
           res.writeHead(400, { "Content-Type": "text/plain" });
           res.end("OAuth exchange failed");
