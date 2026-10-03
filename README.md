@@ -5,7 +5,7 @@ don't be a meat proxy
 A Slack bot that calls out people who paste AI-generated text without
 reading it. Trigger it on a message (a reaction, a message shortcut or a
 slash command) and it posts a canned callout in the message's thread and
-adds `:meat_proxy:`. It listens on HTTP and requires a public URL.
+adds 🥩 (`:cut_of_meat:`). It listens on HTTP and requires a public URL.
 
 ## Setup
 
@@ -28,8 +28,8 @@ You need Node 22.9 or later and a Slack workspace where you can create apps.
    Information_ → _App Credentials_, copy the _Signing Secret_. Then, under
    _Install App_, install it to the workspace and copy the _Bot User OAuth
    Token_ (`xoxb-…`).
-5. **Upload a custom emoji named `:meat_proxy:`.** The repo ships no
-   artwork: pick any image. To use another emoji, set `TRIGGER_EMOJI`.
+5. **Upload a custom emoji named `:cut_of_meat:`.** The repo ships no
+   artwork: pick any image. To use a different response emoji, edit `src/callOut.ts`.
 6. **Invite the bot to channels** where it should work, with
    `/invite @meatproxybot`.
 7. **Fill in `.env`:** `cp .env.example .env`, then set `SLACK_BOT_TOKEN`
@@ -66,10 +66,9 @@ queries the `/healthz` endpoint.
 
 ### Reaction trigger (not anonymous)
 
-React to a message with `:meat_proxy:` (or whatever `TRIGGER_EMOJI` is set
-to) and the bot calls it out: it adds its own `:meat_proxy:` and posts a
-callout in the message's thread. The trigger emoji can be the same one the
-bot responds with.
+React to a message with `:meat_proxy:` (or set `TRIGGER_EMOJI` to any other
+emoji) and the bot calls it out: it adds 🥩 (`:cut_of_meat:`) and posts a
+callout in the message's thread.
 
 This trigger is **not anonymous**: Slack shows everyone who reacted. For an
 anonymous callout, use the message shortcut or `/meatproxy` instead.
@@ -78,12 +77,16 @@ The reactor gets no feedback. A message that was already called out is
 left alone, and errors (for example, the bot is not in the channel) are
 only logged at warn level. Removing the reaction does nothing.
 
+On a workspace without a custom `:meat_proxy:` emoji, this trigger is
+dormant. To activate it, upload a `:meat_proxy:` emoji or set
+`TRIGGER_EMOJI` to an emoji that already exists in your workspace.
+
 ### Message shortcut (anonymous)
 
 Hover over a message, open its _More actions_ (⋮) menu and choose
 _🥩 Call out meat proxy_. (The first time, it may be under _More message
-shortcuts…_.) The bot posts a callout in the message's thread and adds
-`:meat_proxy:`. Nobody sees who triggered it: only you get a reply, an
+shortcuts…_.) The bot posts a callout in the message's thread and adds 🥩
+(`:cut_of_meat:`). Nobody sees who triggered it: only you get a reply, an
 ephemeral one, and you get one on success too, so a failure is never
 mistaken for success:
 
@@ -105,9 +108,9 @@ failure is logged.
 Calls out a message anonymously from the keyboard. Open the message's
 _More actions_ (⋮) menu, or right-click it, choose _Copy link_, then run
 `/meatproxy <link>` in any channel. The bot calls out the linked message in
-its thread and replies to you alone, ephemerally, with the same replies as
-the shortcut. Nobody else sees that you ran it; you only appear in the bot's
-audit log.
+its thread, adds 🥩 (`:cut_of_meat:`), and replies to you alone, ephemerally,
+with the same replies as the shortcut. Nobody else sees that you ran it; you
+only appear in the bot's audit log.
 
 - The link is required: `/meatproxy` alone, or `/meatproxy help`, shows
   usage instead of guessing a message.
