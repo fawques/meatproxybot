@@ -12,10 +12,13 @@ RUN npm run build
 # Runtime stage: production dependencies and the compiled output only.
 FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production
+ENV NODE_OPTIONS=--max-old-space-size=128
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
+# Create /data directory for persistent storage (installations, backups)
+RUN mkdir -p /data && chown node:node /data
 # The node image ships an unprivileged "node" user (uid 1000).
 USER node
 # HTTP receiver listens on PORT (default 3000). Configuration comes from the
