@@ -128,7 +128,7 @@ export async function createApp(
       const state = generateSignedState(stateSecret);
       const url =
         `https://slack.com/oauth/v2/authorize?client_id=${clientId}&` +
-        `scope=chat:write,reactions:read,reactions:write,commands,channels:history,groups:history&` +
+        `scope=${encodeURIComponent("chat:write reactions:read reactions:write commands channels:history groups:history")}&` +
         `state=${encodeURIComponent(state)}`;
       res.writeHead(302, { Location: url });
       res.end();
@@ -172,7 +172,7 @@ export async function createApp(
               bot: {
                 id: undefined,
                 token: response.access_token,
-                scopes: response.scope?.split(",") ?? [],
+                scopes: response.scope?.split(" ") ?? [],
               },
               bot_user_id: response.bot_user_id,
             };
