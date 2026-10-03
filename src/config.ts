@@ -1,3 +1,5 @@
+import type { WorkspaceStore } from "./workspaceStore.js";
+
 export interface Config {
   slackBotToken?: string;
   slackSigningSecret: string;
@@ -8,6 +10,7 @@ export interface Config {
   stateSecret?: string;
   databaseUrl?: string;
   databaseSchema: string;
+  workspaceStore?: WorkspaceStore;
 }
 
 export class ConfigError extends Error {
@@ -116,4 +119,41 @@ function parsePort(value: string | undefined, problems: string[]): number {
     return DEFAULT_PORT;
   }
   return port;
+}
+
+/**
+ * Get the effective trigger emoji for a workspace.
+ * First looks up workspace-specific configuration, then falls back to the
+ * global default.
+ */
+export function getTriggerEmojiForWorkspace(
+  config: Config,
+  teamId: string,
+): string {
+  if (config.workspaceStore) {
+    const workspaceEmoji = config.workspaceStore.getTriggerEmoji(teamId);
+    if (workspaceEmoji) {
+      return workspaceEmoji;
+    }
+  }
+  return config.triggerEmoji;
+}
+
+function requirePrefixed(
+  env: NodeJS.ProcessEnv,
+  name: string,
+  prefix: string,
+  problems: string[],
+): string {
+  const value = env[name]?.trim();
+  if (!value) {
+    problems.push(
+      `${name} is missing (expected a token starting with "${prefix}")`,
+    );
+    return "";
+  }
+  if (!value.startsWith(prefix)) {
+    problems.push(`${name} must start with "${prefix}"`);
+  }
+  return value;
 }

@@ -1,6 +1,7 @@
 import type { App } from "@slack/bolt";
 import { callOut } from "./callOut.js";
 import type { Config } from "./config.js";
+import { getTriggerEmojiForWorkspace } from "./config.js";
 
 /**
  * Registers the public trigger: reacting to a message with the trigger emoji
@@ -14,7 +15,9 @@ export function registerReactionTrigger(
   callOutFn: typeof callOut = callOut,
 ): void {
   app.event("reaction_added", async ({ event, context, client, logger }) => {
-    if (event.reaction !== config.triggerEmoji) return;
+    const teamId: string = context.teamId ?? "";
+    const triggerEmoji = getTriggerEmojiForWorkspace(config, teamId);
+    if (event.reaction !== triggerEmoji) return;
     // Bolt types the item as a message, but Slack also sends reactions on
     // files and file comments.
     const itemType: string = event.item.type;

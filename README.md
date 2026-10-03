@@ -78,8 +78,38 @@ left alone, and errors (for example, the bot is not in the channel) are
 only logged at warn level. Removing the reaction does nothing.
 
 On a workspace without a custom `:meat_proxy:` emoji, this trigger is
-dormant. To activate it, upload a `:meat_proxy:` emoji or set
-`TRIGGER_EMOJI` to an emoji that already exists in your workspace.
+dormant. To activate it, upload a `:meat_proxy:` emoji or configure a
+workspace-specific trigger emoji.
+
+#### Per-Workspace Configuration
+
+Each workspace can configure its own trigger emoji independently. The bot uses:
+
+1. Workspace-specific configuration (if configured), or
+2. The `TRIGGER_EMOJI` environment variable (defaults to `:meat_proxy:`)
+
+To configure a workspace-specific trigger emoji, the bot stores the setting in
+its workspace installation state. Future versions may include a configuration
+command. For now, workspace-specific emoji can be set by modifying the
+`WorkspaceStore` in your deployment.
+
+Example:
+
+```typescript
+import { InMemoryWorkspaceStore } from "./src/workspaceStore.js";
+
+const store = new InMemoryWorkspaceStore();
+store.setTriggerEmoji("T123456", "robot_face");
+store.setTriggerEmoji("T789012", "tada");
+
+const config = loadConfig();
+config.workspaceStore = store;
+const app = createApp(config);
+```
+
+This allows `T123456` workspace to trigger with `:robot_face:` and `T789012`
+workspace to trigger with `:tada:`, while other workspaces fall back to the
+global `TRIGGER_EMOJI` setting.
 
 ### Message shortcut (anonymous)
 
