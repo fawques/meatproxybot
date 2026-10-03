@@ -8,14 +8,15 @@ import { InMemoryWorkspaceStore } from "../src/workspaceStore.js";
 
 const valid = {
   SLACK_BOT_TOKEN: "xoxb-123",
-  SLACK_APP_TOKEN: "xapp-456",
+  SLACK_SIGNING_SECRET: "my-signing-secret",
 };
 
 describe("loadConfig", () => {
-  it("loads tokens and defaults TRIGGER_EMOJI to meat_proxy", () => {
+  it("loads tokens and defaults PORT to 3000 and TRIGGER_EMOJI to meat_proxy", () => {
     expect(loadConfig(valid)).toEqual({
       slackBotToken: "xoxb-123",
-      slackAppToken: "xapp-456",
+      slackSigningSecret: "my-signing-secret",
+      port: 3000,
       triggerEmoji: "meat_proxy",
     });
   });
@@ -26,7 +27,11 @@ describe("loadConfig", () => {
     ).toBe("robot_face");
   });
 
-  it.each(["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"])(
+  it("uses PORT when set as a valid integer", () => {
+    expect(loadConfig({ ...valid, PORT: "8080" }).port).toBe(8080);
+  });
+
+  it.each(["SLACK_BOT_TOKEN", "SLACK_SIGNING_SECRET"])(
     "names %s when it is missing",
     (name) => {
       const env: Record<string, string> = { ...valid };
@@ -44,14 +49,24 @@ describe("loadConfig", () => {
       message = (err as Error).message;
     }
     expect(message).toMatch(/SLACK_BOT_TOKEN is missing/);
-    expect(message).toMatch(/SLACK_APP_TOKEN is missing/);
+    expect(message).toMatch(/SLACK_SIGNING_SECRET is missing/);
   });
 
-  it("rejects tokens with the wrong prefix", () => {
+  it("rejects SLACK_BOT_TOKEN with the wrong prefix", () => {
     expect(() =>
-      loadConfig({ SLACK_BOT_TOKEN: "xapp-1", SLACK_APP_TOKEN: "xoxb-2" }),
-    ).toThrow(
-      /SLACK_BOT_TOKEN must start with "xoxb-"[\s\S]*SLACK_APP_TOKEN must start with "xapp-"/,
+      loadConfig({ SLACK_BOT_TOKEN: "xapp-1", SLACK_SIGNING_SECRET: "secret" }),
+    ).toThrow(/SLACK_BOT_TOKEN must start with "xoxb-"/);
+  });
+
+  it("rejects PORT as a non-integer", () => {
+    expect(() => loadConfig({ ...valid, PORT: "abc" })).toThrow(
+      /PORT must be an integer from 1 to 65535/,
+    );
+  });
+
+  it("rejects PORT as out of range", () => {
+    expect(() => loadConfig({ ...valid, PORT: "0" })).toThrow(
+      /PORT must be an integer from 1 to 65535/,
     );
   });
 

@@ -12,7 +12,8 @@ const TS = "1700000000.000100";
 
 const baseConfig: Config = {
   slackBotToken: "xoxb-test",
-  slackAppToken: "xapp-test",
+  slackSigningSecret: "test-signing-secret",
+  port: 3000,
   triggerEmoji: "meat_proxy",
 };
 
@@ -31,8 +32,7 @@ function setup(
 ) {
   const app = new App({
     token: baseConfig.slackBotToken,
-    appToken: baseConfig.slackAppToken,
-    socketMode: true,
+    signingSecret: baseConfig.slackSigningSecret,
     logLevel: LogLevel.ERROR,
     tokenVerificationEnabled: false,
   });

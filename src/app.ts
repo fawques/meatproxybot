@@ -14,14 +14,26 @@ export interface CreateAppOptions {
 }
 
 /**
- * Builds the Bolt app in Socket Mode and registers its handlers.
- * It does not open the Socket Mode connection: call `app.start()` for that.
+ * Builds the Bolt app on an HTTP receiver and registers its handlers. Events,
+ * interactivity and slash commands all arrive on the default `/slack/events`
+ * endpoint, signed with `config.slackSigningSecret`. It does not start
+ * listening: call `app.start()` for that.
  */
 export function createApp(config: Config, options: CreateAppOptions = {}): App {
   const app = new App({
     token: config.slackBotToken,
-    appToken: config.slackAppToken,
-    socketMode: true,
+    signingSecret: config.slackSigningSecret,
+    port: config.port,
+    customRoutes: [
+      {
+        path: "/healthz",
+        method: ["GET"],
+        handler: (_req, res) => {
+          res.writeHead(200, { "Content-Type": "text/plain" });
+          res.end("ok");
+        },
+      },
+    ],
     logLevel: options.logLevel ?? LogLevel.INFO,
     tokenVerificationEnabled: options.tokenVerificationEnabled ?? true,
   });

@@ -2,7 +2,8 @@ import type { WorkspaceStore } from "./workspaceStore.js";
 
 export interface Config {
   slackBotToken: string;
-  slackAppToken: string;
+  slackSigningSecret: string;
+  port: number;
   triggerEmoji: string;
   workspaceStore?: WorkspaceStore;
 }
@@ -12,6 +13,7 @@ export class ConfigError extends Error {
 }
 
 const DEFAULT_TRIGGER_EMOJI = "meat_proxy";
+const DEFAULT_PORT = 3000;
 
 /**
  * Reads and validates the bot's configuration from the environment.
@@ -27,12 +29,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     "xoxb-",
     problems,
   );
-  const slackAppToken = requirePrefixed(
-    env,
-    "SLACK_APP_TOKEN",
-    "xapp-",
-    problems,
-  );
+  const slackSigningSecret = env.SLACK_SIGNING_SECRET?.trim() || "";
+  if (!slackSigningSecret) {
+    problems.push("SLACK_SIGNING_SECRET is missing");
+  }
+
+  const port = parsePort(env.PORT, problems);
 
   const triggerEmoji = (
     env.TRIGGER_EMOJI?.trim() || DEFAULT_TRIGGER_EMOJI
@@ -49,7 +51,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
 
-  return { slackBotToken, slackAppToken, triggerEmoji };
+  return { slackBotToken, slackSigningSecret, port, triggerEmoji };
+}
+
+function parsePort(value: string | undefined, problems: string[]): number {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return DEFAULT_PORT;
+  }
+  const port = Number(trimmed);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    problems.push(`PORT must be an integer from 1 to 65535, got "${trimmed}"`);
+    return DEFAULT_PORT;
+  }
+  return port;
 }
 
 /**
