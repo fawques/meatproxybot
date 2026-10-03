@@ -20,7 +20,7 @@ export function registerReactionTrigger(
     const itemType: string = event.item.type;
     if (itemType !== "message") return;
     const { botUserId } = context;
-    // The bot's own :meat_proxy: fires reaction_added too; it must not loop.
+    // The bot's own :cut_of_meat: fires reaction_added too; it must not loop.
     if (botUserId === undefined || event.user === botUserId) return;
 
     const target = { channel: event.item.channel, ts: event.item.ts };

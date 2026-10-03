@@ -121,7 +121,7 @@ describe("callOut", () => {
     expect(client.reactions.add).toHaveBeenCalledWith({
       channel: CHANNEL,
       timestamp: TS,
-      name: "meat_proxy",
+      name: "cut_of_meat",
     });
     expect(client.chat.postMessage).toHaveBeenCalledWith({
       channel: CHANNEL,
@@ -190,7 +190,7 @@ describe("callOut", () => {
 
   it("does nothing when the bot already reacted", async () => {
     const { client } = mockClient({
-      reactions: [{ name: "meat_proxy", users: ["UOTHER", BOT] }],
+      reactions: [{ name: "cut_of_meat", users: ["UOTHER", BOT] }],
     });
     const { result, log } = run(client);
     await expect(result).resolves.toEqual({ status: "already" });
@@ -201,7 +201,7 @@ describe("callOut", () => {
 
   it("still calls out when only other users reacted with the emoji", async () => {
     const { client } = mockClient({
-      reactions: [{ name: "meat_proxy", users: ["UOTHER"] }],
+      reactions: [{ name: "cut_of_meat", users: ["UOTHER"] }],
     });
     await expect(run(client).result).resolves.toEqual({ status: "posted" });
   });
@@ -318,7 +318,7 @@ describe("callOut", () => {
     expect(client.reactions.remove).toHaveBeenCalledWith({
       channel: CHANNEL,
       timestamp: TS,
-      name: "meat_proxy",
+      name: "cut_of_meat",
     });
     expect(auditLine(log)).toMatchObject({
       poster: POSTER,
@@ -357,5 +357,28 @@ describe("callOut", () => {
       status: "posted",
     });
     spy.mockRestore();
+  });
+
+  it("dedup recognizes legacy meat_proxy reaction from the bot", async () => {
+    const { client } = mockClient({
+      reactions: [{ name: "meat_proxy", users: ["UOTHER", BOT] }],
+    });
+    const { result, log } = run(client);
+    await expect(result).resolves.toEqual({ status: "already" });
+    expect(client.reactions.add).not.toHaveBeenCalled();
+    expect(client.chat.postMessage).not.toHaveBeenCalled();
+    expect(auditLine(log)).toMatchObject({ status: "already" });
+  });
+
+  it("still calls out when only other users reacted with legacy meat_proxy", async () => {
+    const { client } = mockClient({
+      reactions: [{ name: "meat_proxy", users: ["UOTHER"] }],
+    });
+    await expect(run(client).result).resolves.toEqual({ status: "posted" });
+    expect(client.reactions.add).toHaveBeenCalledWith({
+      channel: CHANNEL,
+      timestamp: TS,
+      name: "cut_of_meat",
+    });
   });
 });
