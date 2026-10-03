@@ -22,7 +22,7 @@ You need Node 22.9 or later and a Slack workspace where you can create apps.
 
 1. **Set up a public URL** pointing to this bot's HTTP receiver on port 3000.
    For local development, use `cloudflared tunnel --url http://localhost:3000`
-   (or any HTTPS tunnel). For production, see deployment docs.
+   (or any HTTPS tunnel).
 2. **Update `manifest.yml`:** Replace the placeholder base URL
    `https://meatproxybot.example.com` with the public base URL from step 1.
    In production that is `https://api.<domain>/meatproxybot`, so the request
