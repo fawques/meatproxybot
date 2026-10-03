@@ -14,6 +14,7 @@ const baseConfig: Config = {
   slackSigningSecret: "test-signing-secret",
   port: 3000,
   triggerEmoji: "meat_proxy",
+  databaseSchema: "meatproxybot_prod",
 };
 
 type Listener = (args: Record<string, unknown>) => Promise<void>;

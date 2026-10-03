@@ -32,7 +32,17 @@ async function main(): Promise<void> {
     throw err;
   }
 
-  const app = createApp(config);
+  let app;
+  try {
+    app = await createApp(config);
+  } catch (err) {
+    log("error", "failed to create app", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    process.exitCode = 1;
+    return;
+  }
+
   await app.start();
   log("info", "meatproxybot ready", {
     port: config.port,

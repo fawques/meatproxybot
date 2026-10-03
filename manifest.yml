@@ -33,10 +33,14 @@ oauth_config:
       - commands
       - channels:history
       - groups:history
+  redirect_urls:
+    - https://meatproxybot.example.com/slack/oauth_redirect
 settings:
   event_subscriptions:
     bot_events:
       - reaction_added
+      - app_uninstalled
+      - tokens_revoked
     request_url: https://meatproxybot.example.com/slack/events
   interactivity:
     is_enabled: true
