@@ -5,7 +5,8 @@ import type { Config } from "../src/config.js";
 
 const config: Config = {
   slackBotToken: "xoxb-test",
-  slackAppToken: "xapp-test",
+  slackSigningSecret: "test-signing-secret",
+  port: 3000,
   triggerEmoji: "meat_proxy",
 };
 
@@ -29,8 +30,7 @@ describe("registerHandlers", () => {
   it("registers handlers on an app that is not connected", () => {
     const app = new App({
       token: config.slackBotToken,
-      appToken: config.slackAppToken,
-      socketMode: true,
+      signingSecret: config.slackSigningSecret,
       logLevel: LogLevel.ERROR,
       tokenVerificationEnabled: false,
     });
@@ -42,8 +42,7 @@ describe("registerHandlers", () => {
   it("registers the reaction_added trigger", () => {
     const app = new App({
       token: config.slackBotToken,
-      appToken: config.slackAppToken,
-      socketMode: true,
+      signingSecret: config.slackSigningSecret,
       logLevel: LogLevel.ERROR,
       tokenVerificationEnabled: false,
     });
@@ -58,8 +57,7 @@ describe("registerHandlers", () => {
   it("registers the message shortcut", () => {
     const app = new App({
       token: config.slackBotToken,
-      appToken: config.slackAppToken,
-      socketMode: true,
+      signingSecret: config.slackSigningSecret,
       logLevel: LogLevel.ERROR,
       tokenVerificationEnabled: false,
     });
@@ -74,8 +72,7 @@ describe("registerHandlers", () => {
   it("registers the /meatproxy slash command", () => {
     const app = new App({
       token: config.slackBotToken,
-      appToken: config.slackAppToken,
-      socketMode: true,
+      signingSecret: config.slackSigningSecret,
       logLevel: LogLevel.ERROR,
       tokenVerificationEnabled: false,
     });

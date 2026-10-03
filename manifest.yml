@@ -1,6 +1,11 @@
 # Slack app manifest for meatproxybot. Create the app from this file at
 # https://api.slack.com/apps -> Create New App -> From a manifest.
 # It declares everything the MVP needs, so the app is created once.
+#
+# Before creating the app, replace the placeholder base URL
+# `https://meatproxybot.example.com` below with the bot's public base URL.
+# In production that is `https://api.<domain>/meatproxybot`, so the request
+# URL becomes `https://api.<domain>/meatproxybot/slack/events`.
 display_information:
   name: meatproxybot
   description: Calls out messages pasted from an AI without being read.
@@ -32,8 +37,11 @@ settings:
   event_subscriptions:
     bot_events:
       - reaction_added
+    request_url: https://meatproxybot.example.com/slack/events
   interactivity:
     is_enabled: true
+    request_url: https://meatproxybot.example.com/slack/events
+  slash_commands_url: https://meatproxybot.example.com/slack/events
   org_deploy_enabled: false
-  socket_mode_enabled: true
+  socket_mode_enabled: false
   token_rotation_enabled: false

@@ -2,7 +2,7 @@ import type { webApi } from "@slack/bolt";
 import { pickCallout, renderCallout } from "./callouts.js";
 
 /** The reaction the bot leaves on a message it called out. */
-export const RESPONSE_EMOJI = "meat_proxy";
+export const RESPONSE_EMOJI = "cut_of_meat";
 
 type WebClient = webApi.WebClient;
 
@@ -51,7 +51,7 @@ interface TargetMessage {
 }
 
 /**
- * Calls out a message: claims it with the bot's :meat_proxy: reaction, then
+ * Calls out a message: claims it with the bot's :cut_of_meat: reaction, then
  * posts a canned callout mentioning its poster in the message's thread.
  * Shared by every trigger. The callout never reveals who triggered it, but
  * every call writes one audit JSON line naming the invoker.
@@ -130,7 +130,9 @@ async function run(
     full: true,
   });
   const alreadyReacted = reactions.message?.reactions?.some(
-    (r) => r.name === RESPONSE_EMOJI && r.users?.includes(botUserId),
+    (r) =>
+      (r.name === RESPONSE_EMOJI || r.name === "meat_proxy") &&
+      r.users?.includes(botUserId),
   );
   if (alreadyReacted) {
     return { status: "already" };
