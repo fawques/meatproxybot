@@ -5,27 +5,37 @@ don't be a meat proxy
 A Slack bot that calls out people who paste AI-generated text without
 reading it. Trigger it on a message (a reaction, a message shortcut or a
 slash command) and it posts a canned callout in the message's thread and
-adds 🥩 (`:cut_of_meat:`). It runs in Socket Mode, so it needs no public URL.
+adds 🥩 (`:cut_of_meat:`). It listens on HTTP and requires a public URL.
 
 ## Setup
 
 You need Node 22.9 or later and a Slack workspace where you can create apps.
 
-1. **Create the Slack app from `manifest.yml`.** At
+1. **Set up a public URL** pointing to this bot's HTTP receiver on port 3000.
+   For local development, use `cloudflared tunnel --url http://localhost:3000`
+   (or any HTTPS tunnel). For production, see deployment docs.
+2. **Update `manifest.yml`:** Replace the placeholder base URL
+   `https://meatproxybot.example.com` with the public base URL from step 1.
+   In production that is `https://api.<domain>/meatproxybot`, so the request
+   URL becomes `https://api.<domain>/meatproxybot/slack/events`.
+3. **Create the Slack app from `manifest.yml`.** At
    <https://api.slack.com/apps>, choose _Create New App_ → _From a
-   manifest_, pick the workspace and paste in `manifest.yml`. It declares
-   Socket Mode, the bot scopes, the `reaction_added` event, the
-   `/meatproxy` command and the _🥩 Call out meat proxy_ shortcut.
-2. **Generate the app-level token and install the app.** Under _Basic
-   Information_ → _App-Level Tokens_, generate a token with the
-   `connections:write` scope (`xapp-…`). Then, under _Install App_, install
-   it to the workspace and copy the _Bot User OAuth Token_ (`xoxb-…`).
-3. **Invite the bot to channels** where it should work, with
+   manifest_, pick the workspace and paste in the updated `manifest.yml`. It
+   declares the bot scopes, the `reaction_added` event, the `/meatproxy`
+   command and the _🥩 Call out meat proxy_ shortcut, plus the HTTP request
+   URLs.
+4. **Copy the signing secret and install the app.** Under _Basic
+   Information_ → _App Credentials_, copy the _Signing Secret_. Then, under
+   _Install App_, install it to the workspace and copy the _Bot User OAuth
+   Token_ (`xoxb-…`).
+5. **Upload a custom emoji named `:cut_of_meat:`.** The repo ships no
+   artwork: pick any image. To use a different response emoji, edit `src/callOut.ts`.
+6. **Invite the bot to channels** where it should work, with
    `/invite @meatproxybot`.
-4. **Fill in `.env`:** `cp .env.example .env`, then set `SLACK_BOT_TOKEN`
-   and `SLACK_APP_TOKEN`. `.env` is gitignored; never commit it.
-5. **Run it with `npm run dev`** after `npm ci`. It logs a JSON `ready` line
-   once connected. For production, `npm run build && npm start`.
+7. **Fill in `.env`:** `cp .env.example .env`, then set `SLACK_BOT_TOKEN`
+   and `SLACK_SIGNING_SECRET`. `.env` is gitignored; never commit it.
+8. **Run it with `npm run dev`** after `npm ci`. It logs a JSON `ready` line
+   once listening. For production, `npm run build && npm start`.
 
 ### Development
 
@@ -38,18 +48,19 @@ Tests never connect to Slack and need no Slack tokens.
 
 ### Run with Docker
 
-The bot only makes outbound connections, so the container exposes no port.
-With `.env` filled in (step 5 above):
+The bot listens on port 3000 (or the `PORT` env var). With `.env` filled in
+and a public URL forwarding to the container on port 3000:
 
 ```sh
 docker build -t meatproxybot .
-docker run --rm --env-file .env meatproxybot
+docker run --rm -p 3000:3000 --env-file .env meatproxybot
 ```
 
 The image runs the compiled bot as the unprivileged `node` user. `.env` is
 excluded from the build context, so tokens never end up in the image; pass
 them at run time. Without them the container exits with status 1 and logs
-which variables are missing.
+which variables are missing. The container includes a health check that
+queries the `/healthz` endpoint.
 
 ## Usage
 

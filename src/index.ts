@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   const app = createApp(config);
   await app.start();
   log("info", "meatproxybot ready", {
-    socketMode: true,
+    port: config.port,
     triggerEmoji: config.triggerEmoji,
   });
 

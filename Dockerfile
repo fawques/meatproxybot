@@ -18,6 +18,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 # The node image ships an unprivileged "node" user (uid 1000).
 USER node
-# Socket Mode only needs outbound connections, so no port is exposed.
-# Configuration comes from the environment, e.g. docker run --env-file .env.
+# HTTP receiver listens on PORT (default 3000). Configuration comes from the
+# environment, e.g. docker run --env-file .env.
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s CMD node -e "fetch('http://localhost:' + (process.env.PORT || 3000) + '/healthz').catch(() => process.exit(1))"
 CMD ["node", "dist/index.js"]
