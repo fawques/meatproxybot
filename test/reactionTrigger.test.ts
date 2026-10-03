@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { callOut, CallOutResult } from "../src/callOut.js";
 import type { Config } from "../src/config.js";
 import { registerReactionTrigger } from "../src/reactionTrigger.js";
+import { InMemoryWorkspaceStore } from "../src/workspaceStore.js";
 
 const BOT = "UBOT";
 const REACTOR = "UREACTOR";
@@ -26,6 +27,7 @@ function setup(
   opts: {
     config?: Partial<Config>;
     callOut?: () => Promise<CallOutResult>;
+    teamId?: string;
   } = {},
 ) {
   const app = new App({
@@ -70,7 +72,7 @@ function setup(
         item: event.item ?? { type: "message", channel: CHANNEL, ts: TS },
         event_ts: "1700000001.000000",
       },
-      context: { botUserId: BOT },
+      context: { botUserId: BOT, teamId: opts.teamId ?? "T000" },
       client,
       logger,
     });
@@ -144,5 +146,57 @@ describe("reaction trigger", () => {
     await expect(fire()).resolves.toBeUndefined();
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn.mock.calls[0]?.[0]).toContain("boom");
+  });
+
+  it("respects workspace-specific trigger emoji from store", async () => {
+    const store = new InMemoryWorkspaceStore();
+    store.setTriggerEmoji("T123", "robot_face");
+    const { callOutMock, fire } = setup({
+      config: { workspaceStore: store },
+      teamId: "T123",
+    });
+    await fire({ reaction: "meat_proxy" });
+    expect(callOutMock).not.toHaveBeenCalled();
+    await fire({ reaction: "robot_face" });
+    expect(callOutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows different workspaces to have different trigger emoji", async () => {
+    const store = new InMemoryWorkspaceStore();
+    store.setTriggerEmoji("T123", "robot_face");
+    store.setTriggerEmoji("T456", "tada");
+
+    const config = { workspaceStore: store };
+    const { callOutMock: callOut1, fire: fire1 } = setup({
+      config,
+      teamId: "T123",
+    });
+    const { callOutMock: callOut2, fire: fire2 } = setup({
+      config,
+      teamId: "T456",
+    });
+
+    await fire1({ reaction: "robot_face" });
+    expect(callOut1).toHaveBeenCalledTimes(1);
+
+    await fire2({ reaction: "tada" });
+    expect(callOut2).toHaveBeenCalledTimes(1);
+
+    await fire1({ reaction: "tada" });
+    expect(callOut1).toHaveBeenCalledTimes(1);
+
+    await fire2({ reaction: "robot_face" });
+    expect(callOut2).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to global emoji for workspaces without configuration", async () => {
+    const store = new InMemoryWorkspaceStore();
+    store.setTriggerEmoji("T123", "robot_face");
+    const { callOutMock, fire } = setup({
+      config: { triggerEmoji: "meat_proxy", workspaceStore: store },
+      teamId: "T999",
+    });
+    await fire({ reaction: "meat_proxy" });
+    expect(callOutMock).toHaveBeenCalledTimes(1);
   });
 });

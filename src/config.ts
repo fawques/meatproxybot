@@ -1,8 +1,11 @@
+import type { WorkspaceStore } from "./workspaceStore.js";
+
 export interface Config {
   slackBotToken: string;
   slackSigningSecret: string;
   port: number;
   triggerEmoji: string;
+  workspaceStore?: WorkspaceStore;
 }
 
 export class ConfigError extends Error {
@@ -62,6 +65,24 @@ function parsePort(value: string | undefined, problems: string[]): number {
     return DEFAULT_PORT;
   }
   return port;
+}
+
+/**
+ * Get the effective trigger emoji for a workspace.
+ * First looks up workspace-specific configuration, then falls back to the
+ * global default.
+ */
+export function getTriggerEmojiForWorkspace(
+  config: Config,
+  teamId: string,
+): string {
+  if (config.workspaceStore) {
+    const workspaceEmoji = config.workspaceStore.getTriggerEmoji(teamId);
+    if (workspaceEmoji) {
+      return workspaceEmoji;
+    }
+  }
+  return config.triggerEmoji;
 }
 
 function requirePrefixed(
