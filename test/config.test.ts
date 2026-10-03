@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ConfigError, loadConfig } from "../src/config.js";
+import {
+  ConfigError,
+  loadConfig,
+  getTriggerEmojiForWorkspace,
+} from "../src/config.js";
+import { InMemoryWorkspaceStore } from "../src/workspaceStore.js";
 
 const valid = {
   SLACK_BOT_TOKEN: "xoxb-123",
@@ -54,5 +59,54 @@ describe("loadConfig", () => {
     expect(() =>
       loadConfig({ ...valid, TRIGGER_EMOJI: "not an emoji" }),
     ).toThrow(/TRIGGER_EMOJI/);
+  });
+});
+
+describe("getTriggerEmojiForWorkspace", () => {
+  it("returns workspace-specific emoji when configured", () => {
+    const store = new InMemoryWorkspaceStore();
+    store.setTriggerEmoji("T123", "robot_face");
+    const config = {
+      slackBotToken: "xoxb-123",
+      slackAppToken: "xapp-456",
+      triggerEmoji: "meat_proxy",
+      workspaceStore: store,
+    };
+    expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("robot_face");
+  });
+
+  it("falls back to global trigger emoji when workspace has no configuration", () => {
+    const store = new InMemoryWorkspaceStore();
+    const config = {
+      slackBotToken: "xoxb-123",
+      slackAppToken: "xapp-456",
+      triggerEmoji: "meat_proxy",
+      workspaceStore: store,
+    };
+    expect(getTriggerEmojiForWorkspace(config, "T999")).toBe("meat_proxy");
+  });
+
+  it("uses global emoji when no workspace store is configured", () => {
+    const config = {
+      slackBotToken: "xoxb-123",
+      slackAppToken: "xapp-456",
+      triggerEmoji: "meat_proxy",
+    };
+    expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("meat_proxy");
+  });
+
+  it("allows different workspaces to use different emoji", () => {
+    const store = new InMemoryWorkspaceStore();
+    store.setTriggerEmoji("T123", "robot_face");
+    store.setTriggerEmoji("T456", "tada");
+    const config = {
+      slackBotToken: "xoxb-123",
+      slackAppToken: "xapp-456",
+      triggerEmoji: "meat_proxy",
+      workspaceStore: store,
+    };
+    expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("robot_face");
+    expect(getTriggerEmojiForWorkspace(config, "T456")).toBe("tada");
+    expect(getTriggerEmojiForWorkspace(config, "T999")).toBe("meat_proxy");
   });
 });

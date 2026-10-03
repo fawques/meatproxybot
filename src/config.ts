@@ -1,7 +1,10 @@
+import type { WorkspaceStore } from "./workspaceStore.js";
+
 export interface Config {
   slackBotToken: string;
   slackAppToken: string;
   triggerEmoji: string;
+  workspaceStore?: WorkspaceStore;
 }
 
 export class ConfigError extends Error {
@@ -47,6 +50,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
 
   return { slackBotToken, slackAppToken, triggerEmoji };
+}
+
+/**
+ * Get the effective trigger emoji for a workspace.
+ * First looks up workspace-specific configuration, then falls back to the
+ * global default.
+ */
+export function getTriggerEmojiForWorkspace(
+  config: Config,
+  teamId: string,
+): string {
+  if (config.workspaceStore) {
+    const workspaceEmoji = config.workspaceStore.getTriggerEmoji(teamId);
+    if (workspaceEmoji) {
+      return workspaceEmoji;
+    }
+  }
+  return config.triggerEmoji;
 }
 
 function requirePrefixed(
