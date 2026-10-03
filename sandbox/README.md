@@ -132,6 +132,12 @@ an agent recreates any that is missing.
 A label left over by an interrupted run is removed the next time an agent
 picks the issue up in a state where it does not belong.
 
+To make agents ignore an issue, add the `symphony-blocked` label yourself.
+Agents never add or remove it. Symphony itself only filters by state, so an
+agent that sees the label, at dispatch or mid-run, moves the issue to
+`Backlog` and changes nothing else. Before you move the issue back, remove the
+label.
+
 The dashboard is published to <http://127.0.0.1:4547>
 (4547 rather than Symphony's usual 4545, so it can run next to the ResViz
 sandbox on 4545 and the Tria one on 4546). Symphony only listens on the VM's
