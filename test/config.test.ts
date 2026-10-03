@@ -90,6 +90,7 @@ describe("getTriggerEmojiForWorkspace", () => {
       slackSigningSecret: "secret-123",
       port: 3000,
       triggerEmoji: "meat_proxy",
+      databaseSchema: "meatproxybot_prod",
       workspaceStore: store,
     };
     expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("robot_face");
@@ -102,6 +103,7 @@ describe("getTriggerEmojiForWorkspace", () => {
       slackSigningSecret: "secret-123",
       port: 3000,
       triggerEmoji: "meat_proxy",
+      databaseSchema: "meatproxybot_prod",
       workspaceStore: store,
     };
     expect(getTriggerEmojiForWorkspace(config, "T999")).toBe("meat_proxy");
@@ -113,6 +115,7 @@ describe("getTriggerEmojiForWorkspace", () => {
       slackSigningSecret: "secret-123",
       port: 3000,
       triggerEmoji: "meat_proxy",
+      databaseSchema: "meatproxybot_prod",
     };
     expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("meat_proxy");
   });
@@ -126,6 +129,7 @@ describe("getTriggerEmojiForWorkspace", () => {
       slackSigningSecret: "secret-123",
       port: 3000,
       triggerEmoji: "meat_proxy",
+      databaseSchema: "meatproxybot_prod",
       workspaceStore: store,
     };
     expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("robot_face");

@@ -138,22 +138,3 @@ export function getTriggerEmojiForWorkspace(
   }
   return config.triggerEmoji;
 }
-
-function requirePrefixed(
-  env: NodeJS.ProcessEnv,
-  name: string,
-  prefix: string,
-  problems: string[],
-): string {
-  const value = env[name]?.trim();
-  if (!value) {
-    problems.push(
-      `${name} is missing (expected a token starting with "${prefix}")`,
-    );
-    return "";
-  }
-  if (!value.startsWith(prefix)) {
-    problems.push(`${name} must start with "${prefix}"`);
-  }
-  return value;
-}
