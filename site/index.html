@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meatproxy</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/privacy/">Privacy</a>
+        <a href="/support/">Support</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Meatproxy</h1>
+      <p>
+        A Slack bot that calls out messages with random witty responses. React,
+        use a slash command, or trigger a shortcut to invoke it.
+      </p>
+
+      <h2>How it works</h2>
+      <ul>
+        <li>
+          <strong>Reaction trigger:</strong> Add any reaction to a message in a
+          channel where the bot is installed.
+        </li>
+        <li>
+          <strong>Slash command:</strong> Use <code>/meatproxy</code> in a
+          message's thread to call out that message.
+        </li>
+        <li>
+          <strong>Shortcut:</strong> Right-click a message and select the
+          Meatproxy shortcut from the context menu.
+        </li>
+      </ul>
+
+      <p>
+        The bot reacts with a :cut_of_meat: emoji to mark the callout and posts
+        a response in the message's thread. It does not reveal who triggered it.
+      </p>
+
+      <h2>Privacy</h2>
+      <p>
+        Meatproxy is designed with privacy in mind. The bot logs who invoked
+        each callout (to detect misuse), but never logs message text or tokens.
+        All logs are kept for no more than 30 days. Installation data is removed
+        immediately when you uninstall the app.
+      </p>
+      <p>
+        For more details, see our
+        <a href="/privacy/">full privacy policy</a>.
+      </p>
+
+      <h2>Install</h2>
+      <p>Add Meatproxy to your Slack workspace:</p>
+      <a href="BOT_BASE_URL/slack/install" class="button">Add to Slack</a>
+
+      <h2>Support</h2>
+      <p>
+        Have questions or need help? Visit our
+        <a href="/support/">support page</a> for contact information and FAQs.
+      </p>
+    </main>
+
+    <footer>
+      <p>© 2024 Víctor Guzmán. All rights reserved.</p>
+    </footer>
+  </body>
+</html>

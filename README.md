@@ -7,6 +7,14 @@ reading it. Trigger it on a message (a reaction, a message shortcut or a
 slash command) and it posts a canned callout in the message's thread and
 adds 🥩 (`:cut_of_meat:`). It listens on HTTP and requires a public URL.
 
+## Public Pages
+
+- **Landing page:** `https://fawques.github.io/meatproxybot/` — overview and install link
+- **Privacy policy:** `https://fawques.github.io/meatproxybot/privacy/` — data practices and rights
+- **Support page:** `https://fawques.github.io/meatproxybot/support/` — contact and FAQ
+
+These pages are hosted on GitHub Pages and are required for marketplace submission.
+
 ## Setup
 
 You need Node 22.9 or later and a Slack workspace where you can create apps.

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy - Meatproxy</title>
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/privacy/">Privacy</a>
+        <a href="/support/">Support</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Privacy Policy</h1>
+      <p>Last updated: <span id="last-updated">2024-10-03</span></p>
+
+      <p>
+        This privacy policy ("Policy") describes what data Meatproxy collects,
+        how we use it, how long we keep it, and your rights. If you have
+        questions about this policy, please contact us at
+        <code>SUPPORT_EMAIL</code>.
+      </p>
+
+      <h2>1. What Data Is Collected</h2>
+
+      <h3>1.1 Audit Log</h3>
+      <p>
+        Every time the bot is triggered, we write one audit log line recording:
+      </p>
+      <ul data-fields="audit">
+        <li><code>event</code>: Always "callout"</li>
+        <li>
+          <code>trigger</code>: The trigger type (reaction, shortcut, or
+          command)
+        </li>
+        <li>
+          <code>invoker</code>: The Slack user ID of the person who triggered
+          the bot
+        </li>
+        <li>
+          <code>channel</code>: The Slack channel ID where the callout occurred
+        </li>
+        <li><code>ts</code>: The timestamp of the target message</li>
+        <li>
+          <code>poster</code>: The Slack user ID of the message author (or null
+          for system messages)
+        </li>
+        <li>
+          <code>status</code>: Whether the callout was posted, already posted,
+          or encountered an error
+        </li>
+        <li>
+          <code>reason</code>: If status is "error", the reason (dm,
+          own_message, not_in_channel, not_found, or unknown)
+        </li>
+      </ul>
+      <p>
+        <strong>What is not logged:</strong> We never log message text, user
+        tokens, or any other sensitive content. We do not log request IP
+        addresses or HTTP access logs.
+      </p>
+
+      <h3>1.2 Installation Data</h3>
+      <p>
+        When you install Meatproxy, we store the following information in our
+        database:
+      </p>
+      <ul data-fields="installation">
+        <li><code>team.id</code>: Your Slack workspace ID</li>
+        <li>
+          <code>enterprise.id</code>: Your enterprise ID (if your workspace is
+          part of an enterprise grid)
+        </li>
+        <li>
+          <code>bot.id</code>: The Slack app's bot user ID in your workspace
+        </li>
+        <li>
+          <code>bot.token</code>: A Slack bot token encrypted with AES-256-GCM
+        </li>
+        <li><code>bot_user_id</code>: The app's user ID in your workspace</li>
+        <li>
+          <code>app_id</code>: The Slack app ID (same across all workspaces)
+        </li>
+        <li>
+          <code>created_at</code>: The timestamp when the app was installed
+        </li>
+        <li>
+          <code>updated_at</code>: The timestamp of the most recent reinstall
+        </li>
+      </ul>
+
+      <h2>2. How Data Is Used</h2>
+
+      <p>We use this data for the following purposes:</p>
+      <ul>
+        <li>
+          <strong>Running the bot:</strong> Installation data allows us to post
+          messages to your workspace. Audit logs help us detect and fix bugs.
+        </li>
+        <li>
+          <strong>Detecting misuse:</strong> Audit logs help us identify users
+          who are abusing the bot (e.g., systematically harassing others). If we
+          detect misuse, we may share the invoker's ID with your workspace's
+          Owners and Admins on a written request, or when legally required.
+        </li>
+      </ul>
+
+      <p>
+        <strong>Who can see the invoker:</strong> The invoker's identity is
+        never posted in Slack and is never shared with the person who posted the
+        message or other workspace members. Only workspace Owners and Admins may
+        request this information in writing, and only for documented misuse. We
+        also disclose it when required by law.
+      </p>
+
+      <h2>3. Legal Basis (GDPR)</h2>
+
+      <ul>
+        <li>
+          <strong>Installation data:</strong> We process this under the contract
+          you create by installing the app.
+        </li>
+        <li>
+          <strong>Audit logs:</strong> We process this based on our legitimate
+          interest in detecting and preventing abuse and understanding how the
+          bot is used.
+        </li>
+      </ul>
+
+      <h2>4. Data Retention</h2>
+
+      <ul>
+        <li>
+          <strong>Audit logs:</strong> All audit logs (including the above, plus
+          any future logs) are kept for no more than 30 days and are not edited
+          one by one before deletion. Access logs, if added in the future, will
+          also be kept for no more than 30 days.
+        </li>
+        <li>
+          <strong>Installation data:</strong> Installation data is stored in our
+          database as long as the app is installed. When you uninstall the app
+          or request data deletion, we remove it immediately from the live
+          database and from all backups within 7 days.
+        </li>
+      </ul>
+
+      <h2>5. Where Data Is Stored</h2>
+
+      <p>
+        All data is stored on a Google Cloud Platform virtual machine located in
+        the United States. We protect your data using TLS 1.2+ for in-transit
+        encryption and AES-256-GCM for bot token encryption at rest. Your data
+        may also be processed by Slack and GitHub, which handle it according to
+        their data processing agreements. These transfers rely on standard
+        contractual clauses (EU SCCs) and/or adequacy decisions where
+        applicable.
+      </p>
+
+      <h2>6. Subprocessors</h2>
+
+      <p>The following subprocessors may handle your data:</p>
+      <ul>
+        <li>
+          <strong>Google Cloud Platform (US):</strong> Hosts the bot's virtual
+          machine and container registry.
+        </li>
+        <li>
+          <strong>GitHub (US):</strong> Hosts the static website. GitHub may log
+          visitor IP addresses as its hosting platform.
+        </li>
+        <li>
+          <strong>Slack (US):</strong> Receives messages, reactions, and user
+          information as part of app execution.
+        </li>
+      </ul>
+
+      <h2>7. Website and Cookies</h2>
+
+      <p>
+        This website has no analytics, no third-party tracking, and no cookies.
+        GitHub may log visitor IP addresses as the hosting platform. The OAuth
+        installation flow uses one strictly necessary, short-lived state cookie
+        to prevent forgery attacks. The bot's host keeps no request or IP logs.
+      </p>
+
+      <h2>8. Your Rights</h2>
+
+      <p>Under GDPR and similar laws, you have the right to:</p>
+      <ul>
+        <li>
+          <strong>Access:</strong> Request a copy of all data we hold about your
+          workspace.
+        </li>
+        <li>
+          <strong>Rectification:</strong> Request that we correct inaccurate
+          data.
+        </li>
+        <li>
+          <strong>Deletion:</strong> Request that we delete your data (by
+          uninstalling the app or submitting a data request).
+        </li>
+        <li>
+          <strong>Portability:</strong> Request that we provide your data in a
+          structured, portable format.
+        </li>
+        <li>
+          <strong>Restriction:</strong> Request that we limit how we use your
+          data.
+        </li>
+        <li>
+          <strong>Objection:</strong> Object to how we use your data (e.g., for
+          abuse detection).
+        </li>
+        <li>
+          <strong>Automated decision-making:</strong> Request human review of
+          automated decisions.
+        </li>
+      </ul>
+
+      <p>
+        To exercise any of these rights, or to request deletion of your data,
+        contact us at <code>SUPPORT_EMAIL</code>. We will respond within one
+        month. If you believe your rights have been violated, you also have the
+        right to lodge a complaint with the supervisory authority in
+        <code>CONTROLLER_COUNTRY</code>.
+      </p>
+
+      <h2>9. Data Controller</h2>
+
+      <p>
+        This app is controlled by the individual Víctor Guzmán
+        (<code>CONTROLLER_COUNTRY</code>). There is no separate legal entity or
+        postal address. For any data requests or privacy questions, contact us
+        at <code>SUPPORT_EMAIL</code>.
+      </p>
+
+      <h2>10. Changes to This Policy</h2>
+
+      <p>
+        We may update this privacy policy from time to time. Changes will be
+        reflected here with an updated "last updated" date. Continued use of the
+        bot constitutes acceptance of the updated policy.
+      </p>
+    </main>
+
+    <footer>
+      <p>© 2024 Víctor Guzmán. All rights reserved.</p>
+    </footer>
+  </body>
+</html>
