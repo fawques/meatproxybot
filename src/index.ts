@@ -1,4 +1,4 @@
-import { createApp } from "./app.js";
+import { createApp, getGlobalInstallationStore } from "./app.js";
 import { ConfigError, loadConfig } from "./config.js";
 
 function log(
@@ -32,7 +32,17 @@ async function main(): Promise<void> {
     throw err;
   }
 
-  const app = createApp(config);
+  let app;
+  try {
+    app = await createApp(config);
+  } catch (err) {
+    log("error", "failed to create app", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    process.exitCode = 1;
+    return;
+  }
+
   await app.start();
   log("info", "meatproxybot ready", {
     port: config.port,
@@ -44,16 +54,21 @@ async function main(): Promise<void> {
     if (stopping) return;
     stopping = true;
     log("info", "meatproxybot shutting down", { signal });
-    app.stop().then(
-      () => {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    (async () => {
+      try {
+        await app.stop();
+        const store = getGlobalInstallationStore();
+        if (store) {
+          await store.close();
+        }
         log("info", "meatproxybot stopped");
         process.exit(0);
-      },
-      (err: unknown) => {
+      } catch (err) {
         log("error", "error while stopping", { error: String(err) });
         process.exit(1);
-      },
-    );
+      }
+    })();
   };
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);

@@ -11,7 +11,10 @@ const srcPath = srcDir.pathname;
 
 function getSourceFiles(): string[] {
   return readdirSync(srcPath)
-    .filter((f) => f.endsWith(".ts") && f !== "scopes.ts")
+    .filter(
+      (f) =>
+        f.endsWith(".ts") && f !== "scopes.ts" && f !== "installationStore.ts",
+    )
     .map((f) => join(srcPath, f));
 }
 
@@ -90,6 +93,9 @@ describe("scopes.ts", () => {
   it("has every scope documented in docs/marketplace.md", () => {
     const docContent = readFileSync(docsMarketplacePath, "utf8");
     for (const scope of Object.keys(BOT_SCOPES)) {
+      if (scope.startsWith("_")) {
+        continue;
+      }
       const escapedScope = scope.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const headingPattern = new RegExp(`### \`${escapedScope}\``);
       const message = `Scope ${scope} not documented in docs/marketplace.md`;

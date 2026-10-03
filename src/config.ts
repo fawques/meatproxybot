@@ -1,10 +1,15 @@
 import type { WorkspaceStore } from "./workspaceStore.js";
 
 export interface Config {
-  slackBotToken: string;
+  slackBotToken?: string;
   slackSigningSecret: string;
   port: number;
   triggerEmoji: string;
+  clientId?: string;
+  clientSecret?: string;
+  stateSecret?: string;
+  databaseUrl?: string;
+  databaseSchema: string;
   workspaceStore?: WorkspaceStore;
 }
 
@@ -14,21 +19,19 @@ export class ConfigError extends Error {
 
 const DEFAULT_TRIGGER_EMOJI = "meat_proxy";
 const DEFAULT_PORT = 3000;
+const DEFAULT_DATABASE_SCHEMA = "meatproxybot_prod";
 
 /**
  * Reads and validates the bot's configuration from the environment.
  * Throws a ConfigError listing every problem, so a misconfigured bot fails
  * fast with a clear message instead of failing on its first Slack call.
+ *
+ * OAuth mode requires CLIENT_ID, CLIENT_SECRET, STATE_SECRET, and DATABASE_URL.
+ * Legacy mode requires SLACK_BOT_TOKEN.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const problems: string[] = [];
 
-  const slackBotToken = requirePrefixed(
-    env,
-    "SLACK_BOT_TOKEN",
-    "xoxb-",
-    problems,
-  );
   const slackSigningSecret = env.SLACK_SIGNING_SECRET?.trim() || "";
   if (!slackSigningSecret) {
     problems.push("SLACK_SIGNING_SECRET is missing");
@@ -45,13 +48,64 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
 
+  const clientId = env.SLACK_CLIENT_ID?.trim();
+  const clientSecret = env.SLACK_CLIENT_SECRET?.trim();
+  const stateSecret = env.SLACK_STATE_SECRET?.trim();
+  const databaseUrl = env.DATABASE_URL?.trim();
+  const databaseSchema = env.DATABASE_SCHEMA?.trim() || DEFAULT_DATABASE_SCHEMA;
+
+  const isOAuthMode = !!(
+    clientId &&
+    clientSecret &&
+    stateSecret &&
+    databaseUrl
+  );
+  const isLegacyMode = !!env.SLACK_BOT_TOKEN?.trim();
+
+  if (!isOAuthMode && !isLegacyMode) {
+    problems.push(
+      "Either OAuth mode (SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_STATE_SECRET, DATABASE_URL) or legacy mode (SLACK_BOT_TOKEN) must be configured",
+    );
+  }
+
+  if (isOAuthMode && !clientId) {
+    problems.push("SLACK_CLIENT_ID is required for OAuth mode");
+  }
+  if (isOAuthMode && !clientSecret) {
+    problems.push("SLACK_CLIENT_SECRET is required for OAuth mode");
+  }
+  if (isOAuthMode && !stateSecret) {
+    problems.push("SLACK_STATE_SECRET is required for OAuth mode");
+  }
+  if (isOAuthMode && !databaseUrl) {
+    problems.push("DATABASE_URL is required for OAuth mode");
+  }
+
   if (problems.length > 0) {
     throw new ConfigError(
       `Invalid configuration:\n  - ${problems.join("\n  - ")}`,
     );
   }
 
-  return { slackBotToken, slackSigningSecret, port, triggerEmoji };
+  const slackBotToken = env.SLACK_BOT_TOKEN?.trim();
+  const config: Config = {
+    slackSigningSecret,
+    port,
+    triggerEmoji,
+    databaseSchema,
+  };
+
+  if (slackBotToken) {
+    config.slackBotToken = slackBotToken;
+  }
+  if (isOAuthMode) {
+    config.clientId = clientId;
+    config.clientSecret = clientSecret;
+    config.stateSecret = stateSecret;
+    config.databaseUrl = databaseUrl;
+  }
+
+  return config;
 }
 
 function parsePort(value: string | undefined, problems: string[]): number {
@@ -83,23 +137,4 @@ export function getTriggerEmojiForWorkspace(
     }
   }
   return config.triggerEmoji;
-}
-
-function requirePrefixed(
-  env: NodeJS.ProcessEnv,
-  name: string,
-  prefix: string,
-  problems: string[],
-): string {
-  const value = env[name]?.trim();
-  if (!value) {
-    problems.push(
-      `${name} is missing (expected a token starting with "${prefix}")`,
-    );
-    return "";
-  }
-  if (!value.startsWith(prefix)) {
-    problems.push(`${name} must start with "${prefix}"`);
-  }
-  return value;
 }

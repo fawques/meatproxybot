@@ -18,6 +18,7 @@ describe("loadConfig", () => {
       slackSigningSecret: "my-signing-secret",
       port: 3000,
       triggerEmoji: "meat_proxy",
+      databaseSchema: "meatproxybot_prod",
     });
   });
 
@@ -31,15 +32,22 @@ describe("loadConfig", () => {
     expect(loadConfig({ ...valid, PORT: "8080" }).port).toBe(8080);
   });
 
-  it.each(["SLACK_BOT_TOKEN", "SLACK_SIGNING_SECRET"])(
-    "names %s when it is missing",
-    (name) => {
-      const env: Record<string, string> = { ...valid };
-      env[name] = "";
-      expect(() => loadConfig(env)).toThrow(ConfigError);
-      expect(() => loadConfig(env)).toThrow(new RegExp(`${name} is missing`));
-    },
-  );
+  it("names SLACK_SIGNING_SECRET when it is missing", () => {
+    const env: Record<string, string> = { ...valid };
+    env.SLACK_SIGNING_SECRET = "";
+    expect(() => loadConfig(env)).toThrow(ConfigError);
+    expect(() => loadConfig(env)).toThrow(/SLACK_SIGNING_SECRET is missing/);
+  });
+
+  it("requires either OAuth or legacy mode configuration", () => {
+    const env: Record<string, string> = {
+      SLACK_SIGNING_SECRET: "secret",
+    };
+    expect(() => loadConfig(env)).toThrow(ConfigError);
+    expect(() => loadConfig(env)).toThrow(
+      /Either OAuth mode.*or legacy mode.*must be configured/,
+    );
+  });
 
   it("names every missing variable at once", () => {
     let message = "";
@@ -48,14 +56,10 @@ describe("loadConfig", () => {
     } catch (err) {
       message = (err as Error).message;
     }
-    expect(message).toMatch(/SLACK_BOT_TOKEN is missing/);
     expect(message).toMatch(/SLACK_SIGNING_SECRET is missing/);
-  });
-
-  it("rejects SLACK_BOT_TOKEN with the wrong prefix", () => {
-    expect(() =>
-      loadConfig({ SLACK_BOT_TOKEN: "xapp-1", SLACK_SIGNING_SECRET: "secret" }),
-    ).toThrow(/SLACK_BOT_TOKEN must start with "xoxb-"/);
+    expect(message).toMatch(
+      /Either OAuth mode.*or legacy mode.*must be configured/,
+    );
   });
 
   it("rejects PORT as a non-integer", () => {
@@ -86,6 +90,7 @@ describe("getTriggerEmojiForWorkspace", () => {
       slackSigningSecret: "secret-123",
       port: 3000,
       triggerEmoji: "meat_proxy",
+      databaseSchema: "meatproxybot_prod",
       workspaceStore: store,
     };
     expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("robot_face");
@@ -98,6 +103,7 @@ describe("getTriggerEmojiForWorkspace", () => {
       slackSigningSecret: "secret-123",
       port: 3000,
       triggerEmoji: "meat_proxy",
+      databaseSchema: "meatproxybot_prod",
       workspaceStore: store,
     };
     expect(getTriggerEmojiForWorkspace(config, "T999")).toBe("meat_proxy");
@@ -109,6 +115,7 @@ describe("getTriggerEmojiForWorkspace", () => {
       slackSigningSecret: "secret-123",
       port: 3000,
       triggerEmoji: "meat_proxy",
+      databaseSchema: "meatproxybot_prod",
     };
     expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("meat_proxy");
   });
@@ -122,6 +129,7 @@ describe("getTriggerEmojiForWorkspace", () => {
       slackSigningSecret: "secret-123",
       port: 3000,
       triggerEmoji: "meat_proxy",
+      databaseSchema: "meatproxybot_prod",
       workspaceStore: store,
     };
     expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("robot_face");

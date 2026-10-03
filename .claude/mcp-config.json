@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "symphony-linear": {
+      "command": "node",
+      "args": [
+        "/home/agent/.local/share/symphony-claude/dist/tools/linear-graphql-server.js"
+      ],
+      "env": {
+        "LINEAR_API_KEY": "proxy-managed",
+        "LINEAR_ENDPOINT": "https://api.linear.app/graphql"
+      }
+    }
+  }
+}

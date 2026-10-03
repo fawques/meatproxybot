@@ -28,7 +28,9 @@ describe("manifest.yml", () => {
   });
 
   it("declares exactly the bot scopes in BOT_SCOPES", () => {
-    const expectedScopes = Object.keys(BOT_SCOPES).sort();
+    const expectedScopes = Object.keys(BOT_SCOPES)
+      .filter((key) => !key.startsWith("_"))
+      .sort();
     const manifestScopes = manifest.oauth_config.scopes.bot.sort();
     expect(manifestScopes).toEqual(expectedScopes);
   });

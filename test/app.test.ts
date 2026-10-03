@@ -8,6 +8,7 @@ const config: Config = {
   slackSigningSecret: "test-signing-secret",
   port: 3000,
   triggerEmoji: "meat_proxy",
+  databaseSchema: "meatproxybot_prod",
 };
 
 afterEach(() => {
@@ -15,9 +16,9 @@ afterEach(() => {
 });
 
 describe("createApp", () => {
-  it("builds the app without calling Slack when token verification is off", () => {
+  it("builds the app without calling Slack when token verification is off", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const app = createApp(config, {
+    const app = await createApp(config, {
       logLevel: LogLevel.ERROR,
       tokenVerificationEnabled: false,
     });

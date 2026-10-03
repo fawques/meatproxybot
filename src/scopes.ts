@@ -14,6 +14,12 @@ export interface ScopeMapping {
 }
 
 export const BOT_SCOPES: Record<string, ScopeMapping> = {
+  _infrastructure: {
+    methods: ["oauth.access"],
+    events: [],
+    features: [],
+    why: "[Infrastructure] OAuth token exchange - server-to-server API call, not a user-facing scope. Not included in manifest.yml.",
+  },
   "chat:write": {
     methods: ["chat.postMessage", "chat.postEphemeral"],
     events: [],
