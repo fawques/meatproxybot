@@ -103,3 +103,75 @@ Before submitting to the Slack Marketplace, complete the following human-only st
 
 7. **Verify GitHub Pages deployment**:
    After merging, confirm the site is live at `https://fawques.github.io/meatproxybot/`.
+
+---
+
+## Marketplace Submission Checklist
+
+This section tracks the status of all requirements for Slack Marketplace submission.
+
+### Listing Assets
+
+| Requirement       | Status                   | Notes                                                                                          |
+| ----------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| Icon              | ✅ Complete              | `docs/marketplace/icon.png` (1024×1024, 5.3 KB)                                                |
+| Short description | ✅ Complete              | "Nudge teammates to read AI-generated text before they paste it." (10 words) in `manifest.yml` |
+| Long description  | ✅ Complete              | 175–4000 characters in `manifest.yml` display_information.long_description                     |
+| Screenshots (3×)  | ✅ Complete              | 1600×1000 PNG files under 2 MB each in `docs/marketplace/`                                     |
+| Video             | ❌ Optional, not planned | Listed as optional in marketplace requirements                                                 |
+
+### Listing Copy
+
+| Requirement                | Status      | Notes                                               |
+| -------------------------- | ----------- | --------------------------------------------------- |
+| Manifest short description | ✅ Complete | `manifest.yml` display_information.description      |
+| Manifest long description  | ✅ Complete | `manifest.yml` display_information.long_description |
+| README aligned             | ✅ Complete | Updated tagline and description                     |
+| package.json aligned       | ✅ Complete | Updated description field                           |
+
+### URLs and Documentation
+
+| Requirement          | Status      | Notes                                                                                         |
+| -------------------- | ----------- | --------------------------------------------------------------------------------------------- |
+| Landing page         | ✅ Complete | https://fawques.github.io/meatproxybot/ (GitHub Pages)                                        |
+| Privacy policy       | ✅ Complete | https://fawques.github.io/meatproxybot/privacy/ (GitHub Pages)                                |
+| Support page         | ✅ Complete | https://fawques.github.io/meatproxybot/support/ (GitHub Pages)                                |
+| Scope justifications | ✅ Complete | See "Scope Mapping Table" section above (VGU-62)                                              |
+| Hosting details      | ✅ Complete | Hosted on owner's shared GCP VM with URLs under `https://api.<domain>/meatproxybot/` (VGU-64) |
+
+### Human-Only Steps (Not Automated)
+
+The following steps require human action and cannot be automated:
+
+1. **Icon Approval** (PENDING)
+   - [ ] Review the generated icon at `docs/marketplace/icon.png`
+   - [ ] Approve or replace with custom artwork if desired
+
+2. **Real Screenshots** (PENDING)
+   - [ ] Replace mock screenshots with real Slack workspace captures
+   - [ ] Three captures required: one per trigger (reaction, shortcut, /meatproxy)
+   - [ ] Each must be exactly 1600×1000 PNG under 2 MB
+   - [ ] Update files: `screenshot-reaction.png`, `screenshot-shortcut.png`, `screenshot-slash.png`
+
+3. **Collaborator** (PENDING)
+   - [ ] Add a collaborator to the app at https://api.slack.com/apps
+
+4. **Minimum Eligibility: 10 Active Workspaces & 10 Weekly Active Users** (PENDING)
+   - [ ] Install the bot on at least 10 active workspaces
+   - [ ] Reach at least 10 weekly active users combined
+   - Workspaces:
+     - [ ] Workspace 1: (add name when ready to submit)
+     - [ ] Workspace 2: (add name when ready to submit)
+     - [ ] Workspace 3: (add name when ready to submit)
+     - [ ] Workspace 4: (add name when ready to submit)
+     - [ ] Workspace 5: (add name when ready to submit)
+     - [ ] Workspace 6: (add name when ready to submit)
+     - [ ] Workspace 7: (add name when ready to submit)
+     - [ ] Workspace 8: (add name when ready to submit)
+     - [ ] Workspace 9: (add name when ready to submit)
+     - [ ] Workspace 10: (add name when ready to submit)
+
+5. **Submit to Marketplace** (PENDING)
+   - [ ] Fill in app listing at https://api.slack.com/apps/{APP_ID}/submission
+   - [ ] Upload icon and screenshots
+   - [ ] Submit the listing for review

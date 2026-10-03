@@ -8,7 +8,14 @@
 # URL becomes `https://api.<domain>/meatproxybot/slack/events`.
 display_information:
   name: meatproxybot
-  description: Calls out messages pasted from an AI without being read.
+  description: Nudge teammates to read AI-generated text before they paste it.
+  long_description: >-
+    meatproxybot helps teams catch AI-generated content before it's shared.
+    Trigger it by reacting to a message with 🥩, using the message shortcut,
+    or typing /meatproxy with a message link. The bot posts a light-hearted
+    reminder in the message's thread, asking the poster to review what they're
+    sharing. The person who triggered it stays anonymous, but the original
+    poster is mentioned so they know to read their message.
   background_color: "#8b1a1a"
 features:
   bot_user:
