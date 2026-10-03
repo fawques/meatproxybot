@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
+import { BOT_SCOPES } from "../src/scopes.js";
 
 interface Manifest {
   features: {
@@ -26,6 +27,12 @@ describe("manifest.yml", () => {
     expect(manifest.settings.interactivity.is_enabled).toBe(true);
   });
 
+  it("declares exactly the bot scopes in BOT_SCOPES", () => {
+    const expectedScopes = Object.keys(BOT_SCOPES).sort();
+    const manifestScopes = manifest.oauth_config.scopes.bot.sort();
+    expect(manifestScopes).toEqual(expectedScopes);
+  });
+
   it("sets consistent request URLs for events, interactivity, and slash commands", () => {
     const eventUrl = manifest.settings.event_subscriptions.request_url;
     const interactivityUrl = manifest.settings.interactivity.request_url;
@@ -35,23 +42,34 @@ describe("manifest.yml", () => {
     expect(commandsUrl).toBe(eventUrl);
   });
 
-  it("declares every bot scope the MVP needs", () => {
-    expect(manifest.oauth_config.scopes.bot).toEqual(
-      expect.arrayContaining([
-        "chat:write",
-        "reactions:read",
-        "reactions:write",
-        "commands",
-        "channels:history",
-        "groups:history",
-      ]),
-    );
+  it("subscribes to every required bot event in BOT_SCOPES", () => {
+    const requiredEvents = new Set<string>();
+    Object.values(BOT_SCOPES).forEach((mapping) => {
+      mapping.events.forEach((event) => {
+        requiredEvents.add(event);
+      });
+    });
+    for (const event of requiredEvents) {
+      expect(manifest.settings.event_subscriptions.bot_events).toContain(event);
+    }
   });
 
-  it("subscribes to reaction_added", () => {
-    expect(manifest.settings.event_subscriptions.bot_events).toContain(
-      "reaction_added",
-    );
+  it("declares every feature required by BOT_SCOPES", () => {
+    const requiredFeatures = new Set<string>();
+    Object.values(BOT_SCOPES).forEach((mapping) => {
+      mapping.features.forEach((feature) => {
+        requiredFeatures.add(feature);
+      });
+    });
+    for (const feature of requiredFeatures) {
+      if (feature === "slash_commands") {
+        expect(manifest.features.slash_commands).toBeDefined();
+        expect(manifest.features.slash_commands.length).toBeGreaterThan(0);
+      } else if (feature === "shortcuts") {
+        expect(manifest.features.shortcuts).toBeDefined();
+        expect(manifest.features.shortcuts.length).toBeGreaterThan(0);
+      }
+    }
   });
 
   it("declares the /meatproxy slash command", () => {
