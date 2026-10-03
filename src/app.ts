@@ -1,3 +1,4 @@
+import { createHmac, randomBytes } from "node:crypto";
 import { App, LogLevel, ExpressReceiver } from "@slack/bolt";
 import { COMMAND, handleMeatproxyCommand } from "./command.js";
 import type { Config } from "./config.js";
@@ -15,6 +16,58 @@ export interface CreateAppOptions {
 }
 
 let globalInstallationStore: PostgresInstallationStore | undefined;
+
+const STATE_TIMEOUT_SECONDS = 600;
+
+function generateSignedState(stateSecret: string): string {
+  const nonce = randomBytes(16).toString("hex");
+  const timestamp = Date.now().toString();
+  const payload = `${nonce}.${timestamp}`;
+  const signature = createHmac("sha256", stateSecret)
+    .update(payload)
+    .digest("hex");
+  return Buffer.from(`${payload}.${signature}`).toString("base64url");
+}
+
+function validateSignedState(
+  state: string,
+  stateSecret: string,
+): { valid: boolean; error?: string } {
+  try {
+    const decoded = Buffer.from(state, "base64url").toString("utf8");
+    const parts = decoded.split(".");
+    if (parts.length !== 3) {
+      return { valid: false, error: "Invalid state format" };
+    }
+
+    const nonce = parts[0];
+    const timestamp = parts[1];
+    const signature = parts[2];
+    if (!nonce || !timestamp || !signature) {
+      return { valid: false, error: "Invalid state format" };
+    }
+    const payload = `${nonce}.${timestamp}`;
+
+    const expectedSignature = createHmac("sha256", stateSecret)
+      .update(payload)
+      .digest("hex");
+
+    if (signature !== expectedSignature) {
+      return { valid: false, error: "Invalid state signature" };
+    }
+
+    const stateTime = parseInt(timestamp, 10);
+    const now = Date.now();
+    if (now - stateTime > STATE_TIMEOUT_SECONDS * 1000) {
+      return { valid: false, error: "State expired" };
+    }
+
+    return { valid: true };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { valid: false, error: `Failed to validate state: ${errorMsg}` };
+  }
+}
 
 /**
  * Builds the Bolt app on an HTTP receiver and registers its handlers. Events,
@@ -58,19 +111,22 @@ export async function createApp(
     tokenVerificationEnabled: options.tokenVerificationEnabled ?? true,
   });
 
-  if (isOAuthMode) {
+  if (
+    isOAuthMode &&
+    config.stateSecret &&
+    config.clientId &&
+    config.clientSecret
+  ) {
+    const stateSecret = config.stateSecret;
+    const clientId = config.clientId;
+    const clientSecret = config.clientSecret;
+
     receiver.router.get("/slack/install", (_req, res) => {
-      const state = Math.random().toString(36).substring(2, 15);
-      const clientId = config.clientId;
-      if (!clientId) {
-        res.writeHead(400, { "Content-Type": "text/plain" });
-        res.end("Client ID not configured");
-        return;
-      }
+      const state = generateSignedState(stateSecret);
       const url =
         `https://slack.com/oauth/v2/authorize?client_id=${clientId}&` +
         `scope=chat:write,reactions:read,reactions:write,commands,channels:history,groups:history&` +
-        `state=${state}`;
+        `state=${encodeURIComponent(state)}`;
       res.writeHead(302, { Location: url });
       res.end();
     });
@@ -78,19 +134,28 @@ export async function createApp(
     receiver.router.get("/slack/oauth_redirect", async (_req, res) => {
       const code = (_req.query as Record<string, unknown> | undefined)?.code as
         string | undefined;
-      const state = (_req.query as Record<string, unknown> | undefined)
+      const stateParam = (_req.query as Record<string, unknown> | undefined)
         ?.state as string | undefined;
 
-      if (!code || !state) {
+      if (!code || !stateParam) {
         res.writeHead(400, { "Content-Type": "text/plain" });
         res.end("Missing code or state parameter");
         return;
       }
 
+      const stateValidation = validateSignedState(stateParam, stateSecret);
+      if (!stateValidation.valid) {
+        const errorMsg = stateValidation.error ?? "Unknown error";
+        app.logger.warn(`OAuth state validation failed: ${errorMsg}`);
+        res.writeHead(400, { "Content-Type": "text/plain" });
+        res.end(`OAuth state validation failed: ${errorMsg}`);
+        return;
+      }
+
       try {
         const response = await app.client.oauth.v2.access({
-          client_id: config.clientId ?? "",
-          client_secret: config.clientSecret ?? "",
+          client_id: clientId,
+          client_secret: clientSecret,
           code,
         });
 
@@ -147,7 +212,7 @@ export function registerHandlers(app: App, config: Config): void {
   if (isOAuthMode) {
     app.event("app_uninstalled", async ({ event, logger }) => {
       const store = getGlobalInstallationStore();
-      const teamId = (event as unknown as Record<string, unknown>).team;
+      const teamId = (event as unknown as Record<string, unknown>).team_id;
       if (store && teamId && typeof teamId === "string") {
         try {
           await store.delete({
@@ -163,7 +228,7 @@ export function registerHandlers(app: App, config: Config): void {
 
     app.event("tokens_revoked", async ({ event, logger }) => {
       const store = getGlobalInstallationStore();
-      const teamId = (event as unknown as Record<string, unknown>).team;
+      const teamId = (event as unknown as Record<string, unknown>).team_id;
       if (store && teamId && typeof teamId === "string") {
         try {
           await store.delete({
