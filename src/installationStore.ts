@@ -37,9 +37,9 @@ export class PostgresInstallationStore {
     const client = await this.pool.connect();
     try {
       await client.query(`
-        CREATE SCHEMA IF NOT EXISTS ${this.schema};
+        CREATE SCHEMA IF NOT EXISTS "${this.schema}";
 
-        CREATE TABLE IF NOT EXISTS ${this.schema}.installations (
+        CREATE TABLE IF NOT EXISTS "${this.schema}".installations (
           id SERIAL PRIMARY KEY,
           team_id VARCHAR(255) NOT NULL,
           enterprise_id VARCHAR(255),
@@ -53,9 +53,9 @@ export class PostgresInstallationStore {
         );
 
         CREATE INDEX IF NOT EXISTS idx_installations_team_id
-          ON ${this.schema}.installations(team_id);
+          ON "${this.schema}".installations(team_id);
         CREATE INDEX IF NOT EXISTS idx_installations_team_enterprise
-          ON ${this.schema}.installations(team_id, enterprise_id);
+          ON "${this.schema}".installations(team_id, enterprise_id);
       `);
     } finally {
       client.release();
@@ -83,7 +83,7 @@ export class PostgresInstallationStore {
       }
 
       const query = `
-        INSERT INTO ${this.schema}.installations
+        INSERT INTO "${this.schema}".installations
           (team_id, enterprise_id, bot_token, bot_id, bot_user_id, app_id, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
         ON CONFLICT (team_id, enterprise_id)
@@ -112,7 +112,7 @@ export class PostgresInstallationStore {
   ): Promise<Record<string, unknown> | null> {
     const client = await this.pool.connect();
     try {
-      let sql = `SELECT * FROM ${this.schema}.installations WHERE team_id = $1`;
+      let sql = `SELECT * FROM "${this.schema}".installations WHERE team_id = $1`;
       const params: (string | null)[] = [query.teamId];
 
       if (query.enterpriseId) {
@@ -152,7 +152,7 @@ export class PostgresInstallationStore {
   async delete(query: InstallationQuery): Promise<void> {
     const client = await this.pool.connect();
     try {
-      let sql = `DELETE FROM ${this.schema}.installations WHERE team_id = $1`;
+      let sql = `DELETE FROM "${this.schema}".installations WHERE team_id = $1`;
       const params: (string | null)[] = [query.teamId];
 
       if (query.enterpriseId) {

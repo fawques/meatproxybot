@@ -57,6 +57,9 @@ function validateSignedState(
     }
 
     const stateTime = parseInt(timestamp, 10);
+    if (!Number.isInteger(stateTime)) {
+      return { valid: false, error: "Invalid state timestamp format" };
+    }
     const now = Date.now();
     if (now - stateTime > STATE_TIMEOUT_SECONDS * 1000) {
       return { valid: false, error: "State expired" };
@@ -159,7 +162,36 @@ export async function createApp(
           code,
         });
 
-        if (response.ok && response.team?.id) {
+        if (response.ok && response.team?.id && response.bot_user_id) {
+          const store = getGlobalInstallationStore();
+          if (store) {
+            const installation = {
+              app_id: response.app_id,
+              enterprise: undefined,
+              team: { id: response.team.id },
+              bot: {
+                id: undefined,
+                token: response.access_token,
+                scopes: response.scope?.split(",") ?? [],
+              },
+              bot_user_id: response.bot_user_id,
+            };
+            try {
+              await store.save(installation);
+              app.logger.info(
+                `Saved installation for team ${response.team.id}`,
+              );
+            } catch (saveErr) {
+              const errorMsg =
+                saveErr instanceof Error ? saveErr.message : String(saveErr);
+              app.logger.error(
+                `Failed to save installation for team ${response.team.id}: ${errorMsg}`,
+              );
+              res.writeHead(500, { "Content-Type": "text/plain" });
+              res.end("Failed to save installation");
+              return;
+            }
+          }
           res.writeHead(200, { "Content-Type": "text/html" });
           res.end(
             "<html><body><h1>Installation successful!</h1>" +
