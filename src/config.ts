@@ -11,6 +11,8 @@ export interface Config {
   databaseUrl?: string;
   databaseSchema: string;
   workspaceStore?: WorkspaceStore;
+  installationDbPath?: string;
+  encryptionKey?: string;
 }
 
 export class ConfigError extends Error {
@@ -88,6 +90,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
 
   const slackBotToken = env.SLACK_BOT_TOKEN?.trim();
+  const installationDbPath = env.INSTALLATION_DB_PATH?.trim();
+  const encryptionKey = env.INSTALLATION_ENCRYPTION_KEY?.trim();
   const config: Config = {
     slackSigningSecret,
     port,
@@ -103,6 +107,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     config.clientSecret = clientSecret;
     config.stateSecret = stateSecret;
     config.databaseUrl = databaseUrl;
+  }
+  if (installationDbPath) {
+    config.installationDbPath = installationDbPath;
+  }
+  if (encryptionKey) {
+    config.encryptionKey = encryptionKey;
   }
 
   return config;

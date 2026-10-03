@@ -5,6 +5,7 @@ import type { Config } from "./config.js";
 import { registerReactionTrigger } from "./reactionTrigger.js";
 import { registerShortcut } from "./shortcut.js";
 import { PostgresInstallationStore } from "./installationStore.js";
+import { scheduleNightlyBackup } from "./backup.js";
 
 export interface CreateAppOptions {
   logLevel?: LogLevel;
@@ -16,6 +17,7 @@ export interface CreateAppOptions {
 }
 
 let globalInstallationStore: PostgresInstallationStore | undefined;
+let globalBackupCleanup: (() => void) | undefined;
 
 const STATE_TIMEOUT_SECONDS = 600;
 const OAUTH_SCOPES =
@@ -232,6 +234,39 @@ export async function createApp(
 export function getGlobalInstallationStore():
   PostgresInstallationStore | undefined {
   return globalInstallationStore;
+}
+
+/**
+ * Starts the nightly backup scheduler if a database path is configured.
+ * Returns a cleanup function to stop the scheduler.
+ */
+export function startBackupScheduler(
+  config: Config,
+  logger: (
+    level: string,
+    msg: string,
+    fields?: Record<string, unknown>,
+  ) => void,
+): (() => void) | null {
+  if (!config.installationDbPath) {
+    return null;
+  }
+
+  const backupDir = config.installationDbPath.replace(/[^/]*$/, "backups");
+  globalBackupCleanup = scheduleNightlyBackup(
+    {
+      dbPath: config.installationDbPath,
+      backupDir,
+      maxBackups: 7,
+    },
+    logger,
+  );
+
+  return globalBackupCleanup;
+}
+
+export function getBackupCleanup(): (() => void) | undefined {
+  return globalBackupCleanup;
 }
 
 /**
