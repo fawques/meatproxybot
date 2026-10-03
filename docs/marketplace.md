@@ -54,3 +54,52 @@ Fetches called-out messages from private channel history. The same unified `fetc
 ### `connections:write`
 
 **Note**: `connections:write` is an **app-level token scope**, not a **bot scope**. It is requested at app creation time, not at install. The Socket Mode token uses it to connect; it is not requested from users. This is an infrastructure requirement, not a user-facing permission.
+
+## Public Pages for Marketplace Listing
+
+The following pages are publicly accessible at stable URLs and required for marketplace submission:
+
+- **Landing page**: `https://fawques.github.io/meatproxybot/` — describes the bot and links to privacy and support pages.
+- **Privacy policy**: `https://fawques.github.io/meatproxybot/privacy/` — covers data collection, use, retention, rights, and contact for data requests.
+- **Support page**: `https://fawques.github.io/meatproxybot/support/` — contact information and FAQ.
+
+## Before Submission (Human-Only Checklist)
+
+Before submitting to the Slack Marketplace, complete the following human-only steps:
+
+1. **Set the support and data-request email address**:
+   Replace `SUPPORT_EMAIL` in `site/` with your actual email:
+
+   ```bash
+   sed -i -e 's/SUPPORT_EMAIL/your-email@example.com/g' site/**/*.html
+   ```
+
+2. **Set the controller country**:
+   Replace `CONTROLLER_COUNTRY` in `site/` with your country:
+
+   ```bash
+   sed -i -e 's/CONTROLLER_COUNTRY/your-country/g' site/**/*.html
+   ```
+
+3. **Set the bot base URL**:
+   Replace `BOT_BASE_URL` in `site/` with the actual bot's base URL (typically `https://api.<domain>/meatproxybot`):
+
+   ```bash
+   sed -i -e 's|BOT_BASE_URL|https://api.<domain>/meatproxybot|g' site/**/*.html
+   ```
+
+4. **Verify the submission is ready**:
+
+   ```bash
+   npm run check:submission
+   ```
+
+   This command fails if any placeholders remain.
+
+5. **Review the privacy policy** against `src/callOut.ts` and `src/installationStore.ts` to confirm all data fields are correctly listed.
+
+6. **Test the pages locally**:
+   Open `site/index.html` in your browser and verify all links work (after running the `sed` command above).
+
+7. **Verify GitHub Pages deployment**:
+   After merging, confirm the site is live at `https://fawques.github.io/meatproxybot/`.
