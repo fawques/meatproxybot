@@ -137,13 +137,25 @@ export class PostgresInstallationStore implements InstallationStore {
   ): Promise<Installation<"v2", false>> {
     const client = await this.pool.connect();
     try {
-      const result = await client.query(
-        `SELECT * FROM "${this.schema}".installations
-         WHERE team_id = $1 AND enterprise_id = $2
-         ORDER BY updated_at DESC, id DESC
-         LIMIT 1`,
-        [query.teamId, query.enterpriseId ?? ""],
-      );
+      // As in deleteInstallation, a workspace install is found by its team
+      // alone (preferring a row with the matching enterprise): the OAuth
+      // redirect saves enterprise_id as '', but events from a workspace in an
+      // Enterprise Grid carry its enterprise id.
+      const result = query.isEnterpriseInstall
+        ? await client.query(
+            `SELECT * FROM "${this.schema}".installations
+             WHERE team_id = $1 AND enterprise_id = $2
+             ORDER BY updated_at DESC, id DESC
+             LIMIT 1`,
+            [query.teamId, query.enterpriseId ?? ""],
+          )
+        : await client.query(
+            `SELECT * FROM "${this.schema}".installations
+             WHERE team_id = $1
+             ORDER BY enterprise_id = $2 DESC, updated_at DESC, id DESC
+             LIMIT 1`,
+            [query.teamId, query.enterpriseId ?? ""],
+          );
 
       const row = result.rows[0] as StoredInstallation | undefined;
       if (!row) {

@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../src/config.js";
 
 // A stand-in for Postgres that keeps installation rows in memory. It answers
-// the store's upsert, select and delete; schema statements return no rows.
+// the store's upsert, select and delete (matching on enterprise_id only when
+// the SQL does); schema statements return no rows.
 interface Row {
   team_id: string;
   enterprise_id: string;
@@ -29,8 +30,16 @@ vi.mock("pg", () => {
         app_id,
       });
     } else if (sql.trimStart().startsWith("SELECT")) {
-      const row = rows.get(key);
-      return Promise.resolve({ rows: row ? [row] : [] });
+      const matches = sql.includes("AND enterprise_id = $2")
+        ? [rows.get(key)].filter((row) => row !== undefined)
+        : [...rows.values()]
+            .filter((row) => row.team_id === params[0])
+            .sort(
+              (a, b) =>
+                Number(b.enterprise_id === params[1]) -
+                Number(a.enterprise_id === params[1]),
+            );
+      return Promise.resolve({ rows: matches.slice(0, 1) });
     } else if (sql.trimStart().startsWith("DELETE") && params.length > 0) {
       rows.delete(key);
     }
@@ -65,12 +74,13 @@ const oauthConfig: Config = {
 };
 
 /** An Events API envelope as Slack posts it for a reaction in team `teamId`. */
-function reactionEnvelope(teamId: string) {
+function reactionEnvelope(teamId: string, enterpriseId: string | null = null) {
   return {
     token: "verification-token",
     team_id: teamId,
+    ...(enterpriseId ? { enterprise_id: enterpriseId } : {}),
     context_team_id: teamId,
-    context_enterprise_id: null,
+    context_enterprise_id: enterpriseId,
     api_app_id: "A1",
     event: {
       type: "reaction_added",
@@ -85,7 +95,7 @@ function reactionEnvelope(teamId: string) {
     event_time: 1700000001,
     authorizations: [
       {
-        enterprise_id: null,
+        enterprise_id: enterpriseId,
         team_id: teamId,
         user_id: "UBOT",
         is_bot: true,
@@ -150,6 +160,28 @@ describe("OAuth mode authorization", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     },
   );
+
+  it("authorizes a workspace in an Enterprise Grid installed without its enterprise", async () => {
+    // The OAuth redirect stores enterprise_id as '', but events from a Grid
+    // workspace carry the enterprise in `authorizations`.
+    const app = await createApp(oauthConfig, {
+      logLevel: LogLevel.ERROR,
+      tokenVerificationEnabled: false,
+    });
+    await installTeam("T1", "xoxb-team-one", "UBOT1");
+    callOutMock.mockResolvedValue({ status: "posted" });
+
+    await app.processEvent({
+      body: reactionEnvelope("T1", "E1"),
+      ack: () => Promise.resolve(),
+    });
+
+    expect(callOutMock).toHaveBeenCalledTimes(1);
+    const [args] = callOutMock.mock.calls[0] as [
+      { client: { token?: string } },
+    ];
+    expect(args.client.token).toBe("xoxb-team-one");
+  });
 
   it("drops events from a team with no installation", async () => {
     const app = await createApp(oauthConfig, {

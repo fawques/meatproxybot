@@ -113,6 +113,40 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
     ).rejects.toThrow("No installation for team T1");
   });
 
+  it("fetches a workspace in an Enterprise Grid saved without its enterprise", async () => {
+    // The OAuth redirect saves enterprise_id as '' even inside a Grid, but
+    // events from that workspace carry the enterprise.
+    await store.init();
+    await store.storeInstallation(installation("T1", "xoxb-1"));
+
+    const found = await store.fetchInstallation({
+      teamId: "T1",
+      enterpriseId: "E1",
+      isEnterpriseInstall: false,
+    });
+    expect(found.bot).toMatchObject({ token: "xoxb-1" });
+  });
+
+  it("fetches an org-wide install only for its enterprise", async () => {
+    await store.init();
+    await store.storeInstallation(installation("T1", "xoxb-e1", "E1"));
+    await store.storeInstallation(installation("T1", "xoxb-e2", "E2"));
+
+    const found = await store.fetchInstallation({
+      teamId: "T1",
+      enterpriseId: "E2",
+      isEnterpriseInstall: true,
+    });
+    expect(found.bot).toMatchObject({ token: "xoxb-e2" });
+    await expect(
+      store.fetchInstallation({
+        teamId: "T1",
+        enterpriseId: "E3",
+        isEnterpriseInstall: true,
+      }),
+    ).rejects.toThrow("No installation for team T1");
+  });
+
   it("deletes a workspace in an Enterprise Grid saved without its enterprise", async () => {
     // The OAuth redirect saves enterprise_id as '' even inside a Grid, but
     // Slack's app_uninstalled envelope carries the enterprise.
