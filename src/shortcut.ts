@@ -47,6 +47,7 @@ export function registerShortcut(
           },
           invoker,
           trigger: "shortcut",
+          teamId: context.teamId,
         });
       }
 

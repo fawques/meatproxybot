@@ -22,7 +22,7 @@ export class ConfigError extends Error {
 
 const DEFAULT_TRIGGER_EMOJI = "meat_proxy";
 const DEFAULT_PORT = 3000;
-const DEFAULT_DATABASE_SCHEMA = "meatproxybot_prod";
+export const DEFAULT_DATABASE_SCHEMA = "meatproxybot_prod";
 
 /**
  * Reads and validates the bot's configuration from the environment.

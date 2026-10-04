@@ -1,4 +1,4 @@
-import { LogLevel } from "@slack/bolt";
+import { App, LogLevel } from "@slack/bolt";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../src/config.js";
 
@@ -63,7 +63,8 @@ vi.mock("pg", () => {
 const callOutMock = vi.hoisted(() => vi.fn());
 vi.mock("../src/callOut.js", () => ({ callOut: callOutMock }));
 
-const { createApp, getGlobalInstallationStore } = await import("../src/app.js");
+const { createApp, getGlobalInstallationStore, registerHandlers } =
+  await import("../src/app.js");
 
 const oauthConfig: Config = {
   slackSigningSecret: "test-signing-secret",
@@ -202,5 +203,78 @@ describe("OAuth mode authorization", () => {
     });
 
     expect(callOutMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("usage recording", () => {
+  const usageEvent = {
+    teamId: "T1",
+    trigger: "reaction",
+    status: "posted",
+    invoker: "UREACTOR",
+  } as const;
+
+  it("hands callOut the team and a recorder that reaches the store", async () => {
+    const app = await createApp(oauthConfig, {
+      logLevel: LogLevel.ERROR,
+      tokenVerificationEnabled: false,
+    });
+    await installTeam("T1", "xoxb-team-one", "UBOT1");
+    const store = getGlobalInstallationStore();
+    if (!store) throw new Error("expected an installation store in OAuth mode");
+    const recordUsage = vi
+      .spyOn(store, "recordUsage")
+      .mockResolvedValue(undefined);
+    callOutMock.mockResolvedValue({ status: "posted" });
+
+    await app.processEvent({
+      body: reactionEnvelope("T1"),
+      ack: () => Promise.resolve(),
+    });
+
+    expect(callOutMock).toHaveBeenCalledTimes(1);
+    const [args] = callOutMock.mock.calls[0] as [
+      {
+        teamId?: string;
+        recordUsage?: (event: typeof usageEvent) => Promise<void>;
+      },
+    ];
+    expect(args.teamId).toBe("T1");
+    expect(args.recordUsage).toBeTypeOf("function");
+    await args.recordUsage?.(usageEvent);
+    expect(recordUsage).toHaveBeenCalledExactlyOnceWith(usageEvent);
+  });
+
+  it("records nothing without a database", async () => {
+    const legacyConfig: Config = {
+      slackSigningSecret: "test-signing-secret",
+      slackBotToken: "xoxb-legacy",
+      port: 3000,
+      triggerEmoji: "meat_proxy",
+      databaseSchema: "meatproxybot_test",
+    };
+    const app = new App({
+      token: legacyConfig.slackBotToken,
+      signingSecret: legacyConfig.slackSigningSecret,
+      tokenVerificationEnabled: false,
+      logLevel: LogLevel.ERROR,
+    });
+    const eventSpy = vi.spyOn(app, "event");
+    registerHandlers(app, legacyConfig);
+    const reactionListener = eventSpy.mock.calls.find(
+      ([name]) => String(name) === "reaction_added",
+    )?.[1] as unknown as (args: unknown) => Promise<void>;
+    callOutMock.mockResolvedValue({ status: "posted" });
+
+    await reactionListener({
+      event: reactionEnvelope("T1").event,
+      context: { teamId: "T1", botUserId: "UBOT" },
+      client: {},
+      logger: { warn: vi.fn() },
+    });
+
+    expect(callOutMock).toHaveBeenCalledTimes(1);
+    const [args] = callOutMock.mock.calls[0] as [{ recordUsage?: unknown }];
+    expect(args.recordUsage).toBeUndefined();
   });
 });

@@ -73,7 +73,7 @@ function payload(message: Record<string, unknown> = {}) {
 async function invoke(
   s: ReturnType<typeof setup>,
   body = payload(),
-  context: Record<string, unknown> = { botUserId: BOT },
+  context: Record<string, unknown> = { botUserId: BOT, teamId: "T1" },
 ) {
   await s.handler({
     shortcut: body,
@@ -107,6 +107,7 @@ describe("message shortcut", () => {
       target: { channel: CHANNEL, ts: TS, threadTs: undefined },
       invoker: INVOKER,
       trigger: "shortcut",
+      teamId: "T1",
     });
   });
 

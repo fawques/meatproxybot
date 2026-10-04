@@ -11,6 +11,16 @@ import {
   isEncryptedToken,
   parseEncryptionKey,
 } from "./tokenCrypto.js";
+import {
+  createUsageTable,
+  deleteTeamUsage,
+  deriveInvokerHashKey,
+  insertUsage,
+  pruneUsage,
+  type UsageEvent,
+} from "./usage.js";
+
+const USAGE_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export interface PostgresInstallationStoreOptions {
   databaseUrl: string;
@@ -32,10 +42,13 @@ export class PostgresInstallationStore implements InstallationStore {
   private pool: Pool;
   private schema: string;
   private encryptionKey: Buffer;
+  private invokerHashKey: Buffer;
+  private pruneTimer: NodeJS.Timeout | undefined;
 
   constructor(options: PostgresInstallationStoreOptions) {
     this.schema = options.schema;
     this.encryptionKey = parseEncryptionKey(options.encryptionKey);
+    this.invokerHashKey = deriveInvokerHashKey(this.encryptionKey);
     this.pool = new Pool({
       connectionString: options.databaseUrl,
       min: 2,
@@ -95,6 +108,7 @@ export class PostgresInstallationStore implements InstallationStore {
           ALTER COLUMN bot_token TYPE TEXT;
       `);
       await this.encryptStoredTokens(client, table);
+      await createUsageTable(client, this.schema);
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
@@ -102,6 +116,22 @@ export class PostgresInstallationStore implements InstallationStore {
     } finally {
       client.release();
     }
+    await this.startUsagePruning();
+  }
+
+  /**
+   * Prunes old usage rows now and daily, so the retention period holds even
+   * when no callout comes in to prune on insert.
+   */
+  private async startUsagePruning(): Promise<void> {
+    await pruneUsage(this.pool, this.schema);
+    if (this.pruneTimer) return;
+    this.pruneTimer = setInterval(() => {
+      pruneUsage(this.pool, this.schema).catch((err: unknown) => {
+        console.error("Failed to prune usage rows:", err);
+      });
+    }, USAGE_PRUNE_INTERVAL_MS);
+    this.pruneTimer.unref();
   }
 
   /**
@@ -239,9 +269,14 @@ export class PostgresInstallationStore implements InstallationStore {
     }
   }
 
+  /**
+   * Deletes the installation and the team's usage rows, together: uninstall
+   * removes everything stored about the workspace.
+   */
   async deleteInstallation(query: InstallationQuery<boolean>): Promise<void> {
     const client = await this.pool.connect();
     try {
+      await client.query("BEGIN");
       // A workspace install is identified by its team alone: the OAuth
       // redirect saves enterprise_id as '' even inside an Enterprise Grid,
       // so matching on the enterprise would leave the bot token behind.
@@ -257,12 +292,26 @@ export class PostgresInstallationStore implements InstallationStore {
           [query.teamId],
         );
       }
+      if (query.teamId) {
+        await deleteTeamUsage(client, this.schema, query.teamId);
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
     } finally {
       client.release();
     }
   }
 
+  /** Records one callout for the weekly usage stats (`npm run stats`). */
+  async recordUsage(event: UsageEvent): Promise<void> {
+    await insertUsage(this.pool, this.schema, this.invokerHashKey, event);
+  }
+
   async close(): Promise<void> {
+    clearInterval(this.pruneTimer);
+    this.pruneTimer = undefined;
     await this.pool.end();
   }
 }

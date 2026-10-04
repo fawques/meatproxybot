@@ -145,7 +145,8 @@ mistaken for success:
 | Invite me to this channel first (`/invite …`) | The bot is not in the channel.            |
 | Couldn't call that out, sorry.                | Anything else; the reason is in the logs. |
 
-The only record of who triggered a callout is the bot's stdout audit log.
+The only record of who triggered a callout is the bot's stdout audit log
+(the usage statistics keep only a keyed hash of the invoker).
 If the bot isn't in the channel it may not be able to reply at all; the
 failure is logged.
 
@@ -179,6 +180,22 @@ workspace can run it, and every reply is ephemeral.
 The bot does not check that the emoji exists (that would need the
 `emoji:read` scope). The reaction trigger only works if it does: upload a
 custom emoji with that name if needed.
+
+## Usage statistics
+
+In OAuth mode, every callout is also stored in the `usage_events` table:
+workspace, trigger, status, time, and a keyed hash of the invoker (never
+the raw user ID). Rows are pruned after 30 days and deleted with the
+installation on uninstall. To see how close the app is to the Slack
+Marketplace minimum (10 active workspaces, 10 weekly active users):
+
+```sh
+npm run build   # not needed in the production image
+npm run stats   # reads DATABASE_URL and DATABASE_SCHEMA
+```
+
+It prints the active workspaces, distinct invokers and callouts of the
+last 7 days.
 
 ## Agents
 

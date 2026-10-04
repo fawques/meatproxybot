@@ -159,6 +159,7 @@ The following steps require human action and cannot be automated:
 4. **Minimum Eligibility: 10 Active Workspaces & 10 Weekly Active Users** (PENDING)
    - [ ] Install the bot on at least 10 active workspaces
    - [ ] Reach at least 10 weekly active users combined
+   - Check progress with `npm run stats` (see README, "Usage statistics")
    - Workspaces:
      - [ ] Workspace 1: (add name when ready to submit)
      - [ ] Workspace 2: (add name when ready to submit)

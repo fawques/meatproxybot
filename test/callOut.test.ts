@@ -381,4 +381,52 @@ describe("callOut", () => {
       name: "cut_of_meat",
     });
   });
+
+  describe("usage tracking", () => {
+    it("records the callout with its team, trigger, status and invoker", async () => {
+      const recordUsage = vi.fn(() => Promise.resolve());
+      const { client } = mockClient();
+      await run(client, { teamId: "T1", recordUsage, trigger: "shortcut" })
+        .result;
+      expect(recordUsage).toHaveBeenCalledExactlyOnceWith({
+        teamId: "T1",
+        trigger: "shortcut",
+        status: "posted",
+        invoker: INVOKER,
+      });
+    });
+
+    it("records failed callouts too", async () => {
+      const recordUsage = vi.fn(() => Promise.resolve());
+      const { client } = mockClient();
+      await run(client, {
+        teamId: "T1",
+        recordUsage,
+        target: { channel: "D123", ts: TS },
+      }).result;
+      expect(recordUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "error" }),
+      );
+    });
+
+    it("skips recording without a team", async () => {
+      const recordUsage = vi.fn(() => Promise.resolve());
+      const { client } = mockClient();
+      await run(client, { recordUsage }).result;
+      expect(recordUsage).not.toHaveBeenCalled();
+    });
+
+    it("logs a recording failure without failing the callout", async () => {
+      const recordUsage = vi.fn(() => Promise.reject(new Error("db down")));
+      const { client } = mockClient();
+      const { result, log } = run(client, { teamId: "T1", recordUsage });
+      await expect(result).resolves.toEqual({ status: "posted" });
+      expect(log).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(log.mock.calls[1]?.[0] ?? "")).toEqual({
+        event: "usage_record_failed",
+        trigger: "reaction",
+        error: "db down",
+      });
+    });
+  });
 });
