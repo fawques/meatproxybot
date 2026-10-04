@@ -5,7 +5,7 @@ import { BOT_SCOPES } from "../src/scopes.js";
 
 interface Manifest {
   features: {
-    slash_commands: { command: string; usage_hint?: string }[];
+    slash_commands: { command: string; url: string; usage_hint?: string }[];
     shortcuts: { name: string; type: string; callback_id: string }[];
   };
   oauth_config: { scopes: { bot: string[] } };
@@ -13,7 +13,6 @@ interface Manifest {
     socket_mode_enabled: boolean;
     interactivity: { is_enabled: boolean; request_url: string };
     event_subscriptions: { bot_events: string[]; request_url: string };
-    slash_commands_url: string;
   };
   display_information: {
     name: string;
@@ -65,10 +64,11 @@ describe("manifest.yml", () => {
   it("sets consistent request URLs for events, interactivity, and slash commands", () => {
     const eventUrl = manifest.settings.event_subscriptions.request_url;
     const interactivityUrl = manifest.settings.interactivity.request_url;
-    const commandsUrl = manifest.settings.slash_commands_url;
     expect(eventUrl).toBeDefined();
     expect(interactivityUrl).toBe(eventUrl);
-    expect(commandsUrl).toBe(eventUrl);
+    for (const command of manifest.features.slash_commands) {
+      expect(command.url).toBe(eventUrl);
+    }
   });
 
   it("subscribes to every required bot event in BOT_SCOPES", () => {

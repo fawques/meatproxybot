@@ -6,3 +6,5 @@ package-lock.json
 sandbox
 sbxenv.yaml
 WORKFLOW.md
+# Managed by the Slack CLI
+.slack/

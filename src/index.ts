@@ -48,7 +48,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  await app.start();
+  await app.start(config.port);
 
   startBackupScheduler(config, log);
 
