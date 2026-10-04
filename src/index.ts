@@ -1,9 +1,4 @@
-import {
-  createApp,
-  getGlobalInstallationStore,
-  startBackupScheduler,
-  getBackupCleanup,
-} from "./app.js";
+import { createApp, getGlobalInstallationStore } from "./app.js";
 import { ConfigError, loadConfig } from "./config.js";
 
 function log(
@@ -50,8 +45,6 @@ async function main(): Promise<void> {
 
   await app.start(config.port);
 
-  startBackupScheduler(config, log);
-
   log("info", "meatproxybot ready", {
     port: config.port,
     triggerEmoji: config.triggerEmoji,
@@ -65,10 +58,6 @@ async function main(): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     (async () => {
       try {
-        const backupCleanup = getBackupCleanup();
-        if (backupCleanup) {
-          backupCleanup();
-        }
         await app.stop();
         const store = getGlobalInstallationStore();
         if (store) {
