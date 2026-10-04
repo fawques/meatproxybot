@@ -72,7 +72,7 @@ describe("OAuth cleanup handlers", () => {
 
   it("passes the enterprise on to the store for an Enterprise Grid workspace", async () => {
     // isEnterpriseInstall: false makes the store delete by team alone (see
-    // installationStore.test.ts), so the NULL-enterprise row still goes.
+    // installationStore.test.ts), so the row saved without it still goes.
     await send(
       app,
       envelope(

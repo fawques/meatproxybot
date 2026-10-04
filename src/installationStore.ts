@@ -13,7 +13,7 @@ export interface PostgresInstallationStoreOptions {
 
 interface StoredInstallation {
   team_id: string;
-  enterprise_id: string | null;
+  enterprise_id: string;
   bot_token: string;
   bot_id: string | null;
   bot_user_id: string | null;
@@ -35,14 +35,18 @@ export class PostgresInstallationStore {
 
   async init(): Promise<void> {
     const client = await this.pool.connect();
+    const table = `"${this.schema}".installations`;
     try {
+      await client.query("BEGIN");
+      // enterprise_id is '' (not NULL) for ordinary workspaces: Postgres treats
+      // NULLs as distinct, so UNIQUE(team_id, enterprise_id) would not hold.
       await client.query(`
         CREATE SCHEMA IF NOT EXISTS "${this.schema}";
 
-        CREATE TABLE IF NOT EXISTS "${this.schema}".installations (
+        CREATE TABLE IF NOT EXISTS ${table} (
           id SERIAL PRIMARY KEY,
           team_id VARCHAR(255) NOT NULL,
-          enterprise_id VARCHAR(255),
+          enterprise_id VARCHAR(255) NOT NULL DEFAULT '',
           bot_token VARCHAR(255) NOT NULL,
           bot_id VARCHAR(255),
           bot_user_id VARCHAR(255),
@@ -53,10 +57,36 @@ export class PostgresInstallationStore {
         );
 
         CREATE INDEX IF NOT EXISTS idx_installations_team_id
-          ON "${this.schema}".installations(team_id);
+          ON ${table}(team_id);
         CREATE INDEX IF NOT EXISTS idx_installations_team_enterprise
-          ON "${this.schema}".installations(team_id, enterprise_id);
+          ON ${table}(team_id, enterprise_id);
       `);
+      // Migrate tables created with a nullable enterprise_id: drop the
+      // duplicate rows reinstalls left behind (keeping the newest per team),
+      // then replace NULL with ''. Both are no-ops once migrated.
+      await client.query(`
+        DELETE FROM ${table}
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (
+              PARTITION BY team_id, COALESCE(enterprise_id, '')
+              ORDER BY updated_at DESC NULLS LAST, id DESC
+            ) AS rank
+            FROM ${table}
+          ) ranked
+          WHERE rank > 1
+        );
+
+        UPDATE ${table} SET enterprise_id = '' WHERE enterprise_id IS NULL;
+
+        ALTER TABLE ${table}
+          ALTER COLUMN enterprise_id SET DEFAULT '',
+          ALTER COLUMN enterprise_id SET NOT NULL;
+      `);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
     } finally {
       client.release();
     }
@@ -70,7 +100,7 @@ export class PostgresInstallationStore {
         Record<string, unknown> | undefined;
       const bot = installation.bot as Record<string, unknown> | undefined;
       const teamId = team?.id as string | undefined;
-      const enterpriseId = (enterprise?.id as string | undefined) ?? null;
+      const enterpriseId = (enterprise?.id as string | undefined) ?? "";
       const botToken = bot?.token as string | undefined;
       const botId = bot?.id as string | undefined;
       const botUserId = installation.bot_user_id as string | undefined;
@@ -112,17 +142,13 @@ export class PostgresInstallationStore {
   ): Promise<Record<string, unknown> | null> {
     const client = await this.pool.connect();
     try {
-      let sql = `SELECT * FROM "${this.schema}".installations WHERE team_id = $1`;
-      const params: (string | null)[] = [query.teamId];
-
-      if (query.enterpriseId) {
-        sql += ` AND enterprise_id = $2`;
-        params.push(query.enterpriseId);
-      } else {
-        sql += ` AND enterprise_id IS NULL`;
-      }
-
-      const result = await client.query(sql, params);
+      const result = await client.query(
+        `SELECT * FROM "${this.schema}".installations
+         WHERE team_id = $1 AND enterprise_id = $2
+         ORDER BY updated_at DESC, id DESC
+         LIMIT 1`,
+        [query.teamId, query.enterpriseId ?? ""],
+      );
 
       if (result.rows.length === 0) {
         return null;
@@ -152,18 +178,21 @@ export class PostgresInstallationStore {
   async delete(query: InstallationQuery): Promise<void> {
     const client = await this.pool.connect();
     try {
-      let sql = `DELETE FROM "${this.schema}".installations WHERE team_id = $1`;
-      const params: (string | null)[] = [query.teamId];
-
       // A workspace install is identified by its team alone: the OAuth
-      // redirect saves enterprise_id as NULL even inside an Enterprise Grid,
-      // so filtering on it would leave the bot token behind.
-      if (query.isEnterpriseInstall && query.enterpriseId) {
-        sql += ` AND enterprise_id = $2`;
-        params.push(query.enterpriseId);
+      // redirect saves enterprise_id as '' even inside an Enterprise Grid,
+      // so matching on the enterprise would leave the bot token behind.
+      if (query.isEnterpriseInstall) {
+        await client.query(
+          `DELETE FROM "${this.schema}".installations
+           WHERE team_id = $1 AND enterprise_id = $2`,
+          [query.teamId, query.enterpriseId ?? ""],
+        );
+      } else {
+        await client.query(
+          `DELETE FROM "${this.schema}".installations WHERE team_id = $1`,
+          [query.teamId],
+        );
       }
-
-      await client.query(sql, params);
     } finally {
       client.release();
     }

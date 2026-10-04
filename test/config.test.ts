@@ -79,6 +79,59 @@ describe("loadConfig", () => {
       loadConfig({ ...valid, TRIGGER_EMOJI: "not an emoji" }),
     ).toThrow(/TRIGGER_EMOJI/);
   });
+
+  describe("OAuth mode", () => {
+    const oauthBase = {
+      SLACK_SIGNING_SECRET: "my-signing-secret",
+      SLACK_CLIENT_ID: "my-client-id",
+      SLACK_CLIENT_SECRET: "my-client-secret",
+      SLACK_STATE_SECRET: "my-state-secret",
+      DATABASE_URL: "postgresql://user:pass@localhost/db",
+    };
+
+    it("requires PUBLIC_BASE_URL in OAuth mode", () => {
+      expect(() => loadConfig(oauthBase)).toThrow(ConfigError);
+      expect(() => loadConfig(oauthBase)).toThrow(
+        /PUBLIC_BASE_URL is required for OAuth mode/,
+      );
+    });
+
+    it("accepts valid PUBLIC_BASE_URL with https://", () => {
+      const config = loadConfig({
+        ...oauthBase,
+        PUBLIC_BASE_URL: "https://api.example.com/meatproxybot",
+      });
+      expect(config.publicBaseUrl).toBe("https://api.example.com/meatproxybot");
+    });
+
+    it("trims trailing slashes from PUBLIC_BASE_URL", () => {
+      const config = loadConfig({
+        ...oauthBase,
+        PUBLIC_BASE_URL: "https://api.example.com/meatproxybot/",
+      });
+      expect(config.publicBaseUrl).toBe("https://api.example.com/meatproxybot");
+    });
+
+    it("rejects PUBLIC_BASE_URL not starting with https://", () => {
+      expect(() =>
+        loadConfig({
+          ...oauthBase,
+          PUBLIC_BASE_URL: "http://api.example.com/meatproxybot",
+        }),
+      ).toThrow(/PUBLIC_BASE_URL must start with "https:\/\/"/);
+    });
+
+    it("includes PUBLIC_BASE_URL in error message when OAuth mode is incomplete", () => {
+      expect(() =>
+        loadConfig({
+          SLACK_SIGNING_SECRET: "secret",
+          SLACK_CLIENT_ID: "id",
+        }),
+      ).toThrow(
+        /Either OAuth mode.*SLACK_CLIENT_SECRET, SLACK_STATE_SECRET, DATABASE_URL, PUBLIC_BASE_URL.*must be configured/,
+      );
+    });
+  });
 });
 
 describe("getTriggerEmojiForWorkspace", () => {
