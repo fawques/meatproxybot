@@ -36,10 +36,11 @@ const config: Config = {
   publicBaseUrl: "https://api.example.com/meatproxybot",
 };
 
-describe("OAuth state cookie", () => {
+describe("OAuth routes", () => {
   let app: App;
   let baseUrl: string;
   let access: ReturnType<typeof vi.spyOn>;
+  let postMessage: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     saveInstallation.mockReset();
@@ -55,7 +56,11 @@ describe("OAuth state cookie", () => {
       bot_user_id: "U999",
       access_token: "xoxb-installed",
       scope: "chat:write commands",
+      authed_user: { id: "U-INSTALLER" },
     });
+    postMessage = vi
+      .spyOn(app.client.chat, "postMessage")
+      .mockResolvedValue({ ok: true });
     const server = await app.start(0);
     baseUrl = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
   });
@@ -145,5 +150,66 @@ describe("OAuth state cookie", () => {
 
     expect(res.status).toBe(400);
     expect(access).not.toHaveBeenCalled();
+  });
+
+  it("sends the browser back into Slack after a successful install", async () => {
+    const { state, cookie } = await install();
+
+    const res = await callback(state, cookieValue(cookie));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const body = await res.text();
+    expect(body).toContain(
+      '<meta http-equiv="refresh" content="0; url=slack://app?team=T123&amp;id=A123">',
+    );
+    expect(body).toContain('<a href="slack://app?team=T123&amp;id=A123">');
+    expect(body).toContain(
+      '<a href="https://fawques.github.io/meatproxybot/">',
+    );
+  });
+
+  it("DMs the installer a welcome message once, with the new bot token", async () => {
+    const { state, cookie } = await install();
+
+    await callback(state, cookieValue(cookie));
+
+    await vi.waitFor(() => {
+      expect(postMessage).toHaveBeenCalledOnce();
+    });
+    expect(postMessage).toHaveBeenCalledWith({
+      token: "xoxb-installed",
+      channel: "U-INSTALLER",
+      text: expect.stringContaining("/invite @meatproxybot") as string,
+    });
+  });
+
+  it("still completes the install when the welcome DM fails", async () => {
+    vi.spyOn(app.client.chat, "postMessage").mockRejectedValue(
+      new Error("An API error occurred: not_allowed"),
+    );
+    const warn = vi.spyOn(app.logger, "warn");
+    const { state, cookie } = await install();
+
+    const res = await callback(state, cookieValue(cookie));
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("slack://app?team=T123");
+    expect(saveInstallation).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("Could not send the welcome DM to U-INSTALLER"),
+      );
+    });
+  });
+
+  it("sends no welcome DM when the install is not saved", async () => {
+    saveInstallation.mockRejectedValue(new Error("db down"));
+    const { state, cookie } = await install();
+
+    const res = await callback(state, cookieValue(cookie));
+
+    expect(res.status).toBe(500);
+    expect(postMessage).not.toHaveBeenCalled();
   });
 });

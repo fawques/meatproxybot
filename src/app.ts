@@ -11,7 +11,12 @@ import {
 } from "@slack/bolt";
 import { callOut } from "./callOut.js";
 import { COMMAND, handleMeatproxyCommand } from "./command.js";
-import type { Config } from "./config.js";
+import { getTriggerEmojiForWorkspace, type Config } from "./config.js";
+import {
+  installSuccessPage,
+  sendWelcomeDm,
+  slackAppUrl,
+} from "./onboarding.js";
 import { registerReactionTrigger } from "./reactionTrigger.js";
 import { registerShortcut } from "./shortcut.js";
 import { PostgresInstallationStore } from "./installationStore.js";
@@ -195,6 +200,18 @@ export async function createApp(
     // Scope the state cookie to the bot's own path on a shared host.
     const cookiePath = new URL(publicBaseUrl).pathname || "/";
 
+    // A settings read failure must not cost the installer their welcome DM.
+    const triggerEmojiFor = async (teamId: string): Promise<string> => {
+      try {
+        return await getTriggerEmojiForWorkspace(config, teamId);
+      } catch (err) {
+        app.logger.warn(
+          `could not read the trigger emoji for team ${teamId}, using the default: ${String(err)}`,
+        );
+        return config.triggerEmoji;
+      }
+    };
+
     receiver.router.get("/slack/install", (_req, res) => {
       const { state, nonce } = generateSignedState(stateSecret);
       const redirectUri = `${publicBaseUrl}/slack/oauth_redirect`;
@@ -289,10 +306,11 @@ export async function createApp(
           try {
             await store.storeInstallation(installation);
             app.logger.info(`Saved installation for team ${response.team.id}`);
-            res.writeHead(200, { "Content-Type": "text/html" });
+            res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
             res.end(
-              "<html><body><h1>Installation successful!</h1>" +
-                "<p>You can close this window.</p></body></html>",
+              installSuccessPage(
+                slackAppUrl(response.team.id, response.app_id),
+              ),
             );
           } catch (saveErr) {
             const errorMsg =
@@ -303,6 +321,18 @@ export async function createApp(
             res.writeHead(500, { "Content-Type": "text/plain" });
             res.end("Failed to save installation");
             return;
+          }
+          const userId = response.authed_user?.id;
+          if (userId) {
+            await sendWelcomeDm(
+              app.client,
+              {
+                botToken: response.access_token,
+                userId,
+                triggerEmoji: await triggerEmojiFor(response.team.id),
+              },
+              app.logger,
+            );
           }
         } else {
           res.writeHead(400, { "Content-Type": "text/plain" });
