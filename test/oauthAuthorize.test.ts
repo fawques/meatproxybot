@@ -70,6 +70,7 @@ const oauthConfig: Config = {
   clientSecret: "client-secret",
   stateSecret: "state-secret",
   databaseUrl: "postgres://unused",
+  encryptionKey: Buffer.alloc(32, 1).toString("base64"),
   publicBaseUrl: "https://example.com",
 };
 
