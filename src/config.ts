@@ -1,3 +1,4 @@
+import { parseEncryptionKey } from "./tokenCrypto.js";
 import type { WorkspaceStore } from "./workspaceStore.js";
 
 export interface Config {
@@ -29,7 +30,8 @@ const DEFAULT_DATABASE_SCHEMA = "meatproxybot_prod";
  * Throws a ConfigError listing every problem, so a misconfigured bot fails
  * fast with a clear message instead of failing on its first Slack call.
  *
- * OAuth mode requires CLIENT_ID, CLIENT_SECRET, STATE_SECRET, DATABASE_URL, and PUBLIC_BASE_URL.
+ * OAuth mode requires CLIENT_ID, CLIENT_SECRET, STATE_SECRET, DATABASE_URL, PUBLIC_BASE_URL,
+ * and INSTALLATION_ENCRYPTION_KEY.
  * Legacy mode requires SLACK_BOT_TOKEN.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -57,6 +59,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   let publicBaseUrl = env.PUBLIC_BASE_URL?.trim();
   const databaseUrl = env.DATABASE_URL?.trim();
   const databaseSchema = env.DATABASE_SCHEMA?.trim() || DEFAULT_DATABASE_SCHEMA;
+  const encryptionKey = env.INSTALLATION_ENCRYPTION_KEY?.trim();
+
+  if (encryptionKey) {
+    try {
+      parseEncryptionKey(encryptionKey);
+    } catch (error) {
+      problems.push((error as Error).message);
+    }
+  }
 
   if (publicBaseUrl) {
     publicBaseUrl = publicBaseUrl.replace(/\/$/, "");
@@ -77,7 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   if (!isOAuthMode && !isLegacyMode) {
     problems.push(
-      "Either OAuth mode (SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_STATE_SECRET, DATABASE_URL, PUBLIC_BASE_URL) or legacy mode (SLACK_BOT_TOKEN) must be configured",
+      "Either OAuth mode (SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_STATE_SECRET, DATABASE_URL, PUBLIC_BASE_URL, INSTALLATION_ENCRYPTION_KEY) or legacy mode (SLACK_BOT_TOKEN) must be configured",
     );
   }
 
@@ -96,6 +107,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (isOAuthMode && !publicBaseUrl) {
     problems.push("PUBLIC_BASE_URL is required for OAuth mode");
   }
+  if (isOAuthMode && !encryptionKey) {
+    problems.push(
+      "INSTALLATION_ENCRYPTION_KEY is required for OAuth mode (generate one with `openssl rand -base64 32`)",
+    );
+  }
 
   if (problems.length > 0) {
     throw new ConfigError(
@@ -105,7 +121,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   const slackBotToken = env.SLACK_BOT_TOKEN?.trim();
   const installationDbPath = env.INSTALLATION_DB_PATH?.trim();
-  const encryptionKey = env.INSTALLATION_ENCRYPTION_KEY?.trim();
   const config: Config = {
     slackSigningSecret,
     port,
