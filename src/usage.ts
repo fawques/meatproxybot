@@ -120,7 +120,7 @@ export async function deleteTeamUsage(
   ]);
 }
 
-/** Active workspaces and users over the STATS_WINDOW_DAYS before `now`. */
+/** Active workspaces and users over the last STATS_WINDOW_DAYS. */
 export async function weeklyUsage(
   db: Queryable,
   schema: string,
@@ -133,8 +133,8 @@ export async function weeklyUsage(
        COUNT(DISTINCT (team_id, invoker_hash)) AS users,
        COUNT(*) AS callouts
      FROM ${usageTable(schema)}
-     WHERE created_at > $1 AND created_at <= $2`,
-    [since, now],
+     WHERE created_at > $1`,
+    [since],
   );
   const row = result.rows[0] ?? {};
   return {

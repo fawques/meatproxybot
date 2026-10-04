@@ -38,15 +38,23 @@ You need Node 22.9 or later and a Slack workspace where you can create apps.
    Information_ → _App Credentials_, copy the _Signing Secret_. Then, under
    _Install App_, install it to the workspace and copy the _Bot User OAuth
    Token_ (`xoxb-…`).
-5. **Upload a custom emoji named `:cut_of_meat:`.** The repo ships no
-   artwork: pick any image. To use a different response emoji, edit `src/callOut.ts`.
+5. **Upload a custom trigger emoji named `:meat_proxy:`** if you want the
+   reaction trigger. The repo ships no artwork: pick any image. To use another
+   emoji instead, set `TRIGGER_EMOJI` or a workspace-specific trigger (see
+   [Reaction trigger](#reaction-trigger-not-anonymous)); a built-in emoji needs
+   no upload. The bot's response reaction, 🥩 (`:cut_of_meat:`), is a built-in
+   Slack emoji, so it needs no upload either. The message shortcut and
+   `/meatproxy` work without any custom emoji.
 6. **Invite the bot to channels** where it should work, with
    `/invite @meatproxybot`.
 7. **Fill in `.env`:** `cp .env.example .env`, then set `SLACK_SIGNING_SECRET`.
    For OAuth mode (multi-workspace), also set `SLACK_CLIENT_ID`,
    `SLACK_CLIENT_SECRET`, `SLACK_STATE_SECRET`, `PUBLIC_BASE_URL`,
-   `DATABASE_URL`, and `INSTALLATION_ENCRYPTION_KEY` (`openssl rand -base64 32`). For legacy mode (single workspace), set `SLACK_BOT_TOKEN`
-   instead. `.env` is gitignored; never commit it.
+   `DATABASE_URL`, and `INSTALLATION_ENCRYPTION_KEY`
+   (`openssl rand -base64 32`). For legacy mode (single workspace), set
+   `SLACK_BOT_TOKEN` instead; OAuth mode ignores it and uses each
+   workspace's stored token.
+   `.env` is gitignored; never commit it.
 8. **Run it with `npm run dev`** after `npm ci`. It logs a JSON `ready` line
    once listening. For production, `npm run build && npm start`.
 

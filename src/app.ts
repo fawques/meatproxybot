@@ -3,6 +3,9 @@ import {
   App,
   LogLevel,
   ExpressReceiver,
+  type Authorize,
+  type AuthorizeResult,
+  type Installation,
   type Context,
   type Logger,
 } from "@slack/bolt";
@@ -152,16 +155,17 @@ export async function createApp(
     await globalInstallationStore.init();
   }
 
+  // Bolt ignores its own OAuth options (clientId, installationStore, ...)
+  // when given a custom receiver, so OAuth mode passes an explicit authorize
+  // that looks up each workspace's bot token. SLACK_BOT_TOKEN is not used
+  // then: it would authorize every workspace with one workspace's token.
   const app = new App({
-    token: config.slackBotToken,
+    ...(globalInstallationStore
+      ? { authorize: authorizeFromStore(globalInstallationStore) }
+      : { token: config.slackBotToken }),
     signingSecret: config.slackSigningSecret,
     port: config.port,
     receiver,
-    clientId: isOAuthMode ? config.clientId : undefined,
-    clientSecret: isOAuthMode ? config.clientSecret : undefined,
-    stateSecret: isOAuthMode ? config.stateSecret : undefined,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-explicit-any
-    installationStore: globalInstallationStore as any,
     logLevel: options.logLevel ?? LogLevel.INFO,
     tokenVerificationEnabled: options.tokenVerificationEnabled ?? true,
   });
@@ -247,19 +251,32 @@ export async function createApp(
             res.end("Installation store not configured");
             return;
           }
-          const installation = {
-            app_id: response.app_id,
-            enterprise: undefined,
+          if (!response.access_token) {
+            res.writeHead(400, { "Content-Type": "text/plain" });
+            res.end("OAuth exchange failed");
+            return;
+          }
+          const installation: Installation<"v2", false> = {
             team: { id: response.team.id },
+            enterprise: undefined,
+            user: {
+              token: undefined,
+              scopes: undefined,
+              id: response.authed_user?.id ?? "",
+            },
             bot: {
-              id: undefined,
               token: response.access_token,
               scopes: response.scope?.split(" ") ?? [],
+              id: "",
+              userId: response.bot_user_id,
             },
-            bot_user_id: response.bot_user_id,
+            ...(response.app_id ? { appId: response.app_id } : {}),
+            tokenType: "bot",
+            isEnterpriseInstall: false,
+            authVersion: "v2",
           };
           try {
-            await store.save(installation);
+            await store.storeInstallation(installation);
             app.logger.info(`Saved installation for team ${response.team.id}`);
             res.writeHead(200, { "Content-Type": "text/html" });
             res.end(
@@ -296,6 +313,27 @@ export async function createApp(
   registerHandlers(app, config);
 
   return app;
+}
+
+/**
+ * Builds Bolt's authorize from the installation store: each event gets the
+ * bot token of the workspace it came from. It throws for a workspace with no
+ * installation, so Bolt drops the event.
+ */
+export function authorizeFromStore(
+  store: PostgresInstallationStore,
+): Authorize<boolean> {
+  return async (source) => {
+    const installation = await store.fetchInstallation(source);
+    const { bot } = installation;
+    const result: AuthorizeResult = { teamId: installation.team.id };
+    const enterpriseId = installation.enterprise?.id ?? source.enterpriseId;
+    if (enterpriseId) result.enterpriseId = enterpriseId;
+    if (bot?.token) result.botToken = bot.token;
+    if (bot?.id) result.botId = bot.id;
+    if (bot?.userId) result.botUserId = bot.userId;
+    return result;
+  };
 }
 
 export function getGlobalInstallationStore():
@@ -352,10 +390,10 @@ export function registerHandlers(app: App, config: Config): void {
         return;
       }
       try {
-        await store.delete({
+        await store.deleteInstallation({
           teamId,
+          enterpriseId,
           isEnterpriseInstall,
-          ...(enterpriseId ? { enterpriseId } : {}),
         });
         logger.info(`Deleted installation for team ${teamId} on ${reason}`);
       } catch (err) {

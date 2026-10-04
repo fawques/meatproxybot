@@ -171,15 +171,23 @@ describe.skipIf(!databaseUrl)("usage tracking in Postgres", () => {
   });
 
   it("deletes the team's usage rows with its installation", async () => {
-    await store.save({
+    await store.storeInstallation({
       team: { id: "T1" },
-      bot: { token: "xoxb-1" },
-      bot_user_id: "UB",
+      enterprise: undefined,
+      user: { token: undefined, scopes: undefined, id: "U0" },
+      bot: { id: "B1", token: "xoxb-1", userId: "UB", scopes: [] },
+      appId: "A1",
+      isEnterpriseInstall: false,
+      authVersion: "v2",
     });
     await store.recordUsage(event("T1", "U1"));
     await store.recordUsage(event("T2", "U2"));
 
-    await store.delete({ teamId: "T1", isEnterpriseInstall: false });
+    await store.deleteInstallation({
+      teamId: "T1",
+      enterpriseId: undefined,
+      isEnterpriseInstall: false,
+    });
 
     expect((await usageRows()).map((row) => row.team_id)).toEqual(["T2"]);
     const installs = await admin.query(
