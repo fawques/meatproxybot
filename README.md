@@ -32,7 +32,8 @@ You need Node 22.9 or later and a Slack workspace where you can create apps.
    manifest_, pick the workspace and paste in the updated `manifest.yml`. It
    declares the bot scopes, the `reaction_added` event, the `/meatproxy`
    command and the _🥩 Call out meat proxy_ shortcut, plus the HTTP request
-   URLs.
+   URLs. If using OAuth (multi-workspace), note that the manifest's
+   `redirect_urls` must include `<public-base-url>/slack/oauth_redirect`.
 4. **Copy the signing secret and install the app.** Under _Basic
    Information_ → _App Credentials_, copy the _Signing Secret_. Then, under
    _Install App_, install it to the workspace and copy the _Bot User OAuth
@@ -41,8 +42,11 @@ You need Node 22.9 or later and a Slack workspace where you can create apps.
    artwork: pick any image. To use a different response emoji, edit `src/callOut.ts`.
 6. **Invite the bot to channels** where it should work, with
    `/invite @meatproxybot`.
-7. **Fill in `.env`:** `cp .env.example .env`, then set `SLACK_BOT_TOKEN`
-   and `SLACK_SIGNING_SECRET`. `.env` is gitignored; never commit it.
+7. **Fill in `.env`:** `cp .env.example .env`, then set `SLACK_SIGNING_SECRET`.
+   For OAuth mode (multi-workspace), also set `SLACK_CLIENT_ID`,
+   `SLACK_CLIENT_SECRET`, `SLACK_STATE_SECRET`, `PUBLIC_BASE_URL`, and
+   `DATABASE_URL`. For legacy mode (single workspace), set `SLACK_BOT_TOKEN`
+   instead. `.env` is gitignored; never commit it.
 8. **Run it with `npm run dev`** after `npm ci`. It logs a JSON `ready` line
    once listening. For production, `npm run build && npm start`.
 

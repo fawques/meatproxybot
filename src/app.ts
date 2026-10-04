@@ -125,17 +125,17 @@ export async function createApp(
     isOAuthMode &&
     config.stateSecret &&
     config.clientId &&
-    config.clientSecret
+    config.clientSecret &&
+    config.publicBaseUrl
   ) {
     const stateSecret = config.stateSecret;
     const clientId = config.clientId;
     const clientSecret = config.clientSecret;
+    const publicBaseUrl = config.publicBaseUrl;
 
     receiver.router.get("/slack/install", (_req, res) => {
       const state = generateSignedState(stateSecret);
-      const host = _req.headers.host as string;
-      const baseUrl = `https://${host}`;
-      const redirectUri = `${baseUrl}/slack/oauth_redirect`;
+      const redirectUri = `${publicBaseUrl}/slack/oauth_redirect`;
       const url =
         `https://slack.com/oauth/v2/authorize?client_id=${clientId}&` +
         `scope=${encodeURIComponent(OAUTH_SCOPES)}&` +
@@ -167,10 +167,12 @@ export async function createApp(
       }
 
       try {
+        const redirectUri = `${publicBaseUrl}/slack/oauth_redirect`;
         const response = await app.client.oauth.v2.access({
           client_id: clientId,
           client_secret: clientSecret,
           code,
+          redirect_uri: redirectUri,
         });
 
         if (response.ok && response.team?.id && response.bot_user_id) {

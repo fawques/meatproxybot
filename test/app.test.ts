@@ -82,3 +82,22 @@ describe("registerHandlers", () => {
     expect(command).toHaveBeenCalledWith("/meatproxy", expect.any(Function));
   });
 });
+
+describe("OAuth routes", () => {
+  it("can build app with publicBaseUrl in config", async () => {
+    const oauthConfig: Config = {
+      slackBotToken: "xoxb-test",
+      slackSigningSecret: "test-signing-secret",
+      port: 3000,
+      triggerEmoji: "meat_proxy",
+      publicBaseUrl: "https://api.example.com/meatproxybot",
+      databaseSchema: "meatproxybot_prod",
+    };
+
+    const app = await createApp(oauthConfig, {
+      logLevel: LogLevel.ERROR,
+      tokenVerificationEnabled: false,
+    });
+    expect(app).toBeInstanceOf(App);
+  });
+});

@@ -8,6 +8,7 @@ export interface Config {
   clientId?: string;
   clientSecret?: string;
   stateSecret?: string;
+  publicBaseUrl?: string;
   databaseUrl?: string;
   databaseSchema: string;
   workspaceStore?: WorkspaceStore;
@@ -28,7 +29,7 @@ const DEFAULT_DATABASE_SCHEMA = "meatproxybot_prod";
  * Throws a ConfigError listing every problem, so a misconfigured bot fails
  * fast with a clear message instead of failing on its first Slack call.
  *
- * OAuth mode requires CLIENT_ID, CLIENT_SECRET, STATE_SECRET, and DATABASE_URL.
+ * OAuth mode requires CLIENT_ID, CLIENT_SECRET, STATE_SECRET, DATABASE_URL, and PUBLIC_BASE_URL.
  * Legacy mode requires SLACK_BOT_TOKEN.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -53,8 +54,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const clientId = env.SLACK_CLIENT_ID?.trim();
   const clientSecret = env.SLACK_CLIENT_SECRET?.trim();
   const stateSecret = env.SLACK_STATE_SECRET?.trim();
+  let publicBaseUrl = env.PUBLIC_BASE_URL?.trim();
   const databaseUrl = env.DATABASE_URL?.trim();
   const databaseSchema = env.DATABASE_SCHEMA?.trim() || DEFAULT_DATABASE_SCHEMA;
+
+  if (publicBaseUrl) {
+    publicBaseUrl = publicBaseUrl.replace(/\/$/, "");
+    if (!publicBaseUrl.startsWith("https://")) {
+      problems.push(
+        `PUBLIC_BASE_URL must start with "https://", got "${publicBaseUrl}"`,
+      );
+    }
+  }
 
   const isOAuthMode = !!(
     clientId &&
@@ -66,7 +77,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   if (!isOAuthMode && !isLegacyMode) {
     problems.push(
-      "Either OAuth mode (SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_STATE_SECRET, DATABASE_URL) or legacy mode (SLACK_BOT_TOKEN) must be configured",
+      "Either OAuth mode (SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_STATE_SECRET, DATABASE_URL, PUBLIC_BASE_URL) or legacy mode (SLACK_BOT_TOKEN) must be configured",
     );
   }
 
@@ -81,6 +92,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   if (isOAuthMode && !databaseUrl) {
     problems.push("DATABASE_URL is required for OAuth mode");
+  }
+  if (isOAuthMode && !publicBaseUrl) {
+    problems.push("PUBLIC_BASE_URL is required for OAuth mode");
   }
 
   if (problems.length > 0) {
@@ -106,6 +120,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     config.clientId = clientId;
     config.clientSecret = clientSecret;
     config.stateSecret = stateSecret;
+    if (publicBaseUrl) {
+      config.publicBaseUrl = publicBaseUrl;
+    }
     config.databaseUrl = databaseUrl;
   }
   if (installationDbPath) {
