@@ -13,7 +13,6 @@ export interface Config {
   databaseUrl?: string;
   databaseSchema: string;
   workspaceStore?: WorkspaceStore;
-  installationDbPath?: string;
   encryptionKey?: string;
 }
 
@@ -120,7 +119,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
 
   const slackBotToken = env.SLACK_BOT_TOKEN?.trim();
-  const installationDbPath = env.INSTALLATION_DB_PATH?.trim();
   const config: Config = {
     slackSigningSecret,
     port,
@@ -139,9 +137,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       config.publicBaseUrl = publicBaseUrl;
     }
     config.databaseUrl = databaseUrl;
-  }
-  if (installationDbPath) {
-    config.installationDbPath = installationDbPath;
   }
   if (encryptionKey) {
     config.encryptionKey = encryptionKey;

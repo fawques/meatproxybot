@@ -182,14 +182,13 @@
         <li>
           <strong>Usage statistics:</strong> Usage records are deleted 30 days
           after the callout. When you uninstall the app, your workspace's usage
-          records are deleted immediately from the live database, together with
-          the installation data, and from all backups within 7 days.
+          records are deleted from the database immediately, together with the
+          installation data.
         </li>
         <li>
           <strong>Installation data:</strong> Installation data is stored in our
           database as long as the app is installed. When you uninstall the app
-          or request data deletion, we remove it immediately from the live
-          database and from all backups within 7 days.
+          or request data deletion, we remove it from the database immediately.
         </li>
       </ul>
 
@@ -224,7 +223,10 @@
         This website has no analytics, no third-party tracking, and no cookies.
         GitHub may log visitor IP addresses as the hosting platform. The OAuth
         installation flow uses one strictly necessary, short-lived state cookie
-        to prevent forgery attacks. The bot's host keeps no request or IP logs.
+        to prevent forgery attacks: the bot's host sets it when you start an
+        installation, it holds only a random value, and it expires after 10
+        minutes or is cleared as soon as Slack sends you back. The bot's host
+        keeps no request or IP logs.
       </p>
 
       <h2>8. Your Rights</h2>
