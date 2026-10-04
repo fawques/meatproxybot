@@ -9,11 +9,13 @@ import {
   type Context,
   type Logger,
 } from "@slack/bolt";
+import { callOut } from "./callOut.js";
 import { COMMAND, handleMeatproxyCommand } from "./command.js";
 import type { Config } from "./config.js";
 import { registerReactionTrigger } from "./reactionTrigger.js";
 import { registerShortcut } from "./shortcut.js";
 import { PostgresInstallationStore } from "./installationStore.js";
+import { PostgresWorkspaceStore } from "./workspaceStore.js";
 
 export interface CreateAppOptions {
   logLevel?: LogLevel;
@@ -25,6 +27,7 @@ export interface CreateAppOptions {
 }
 
 let globalInstallationStore: PostgresInstallationStore | undefined;
+let globalWorkspaceStore: PostgresWorkspaceStore | undefined;
 
 const STATE_TIMEOUT_SECONDS = 600;
 /**
@@ -151,6 +154,16 @@ export async function createApp(
       encryptionKey: config.encryptionKey ?? "",
     });
     await globalInstallationStore.init();
+
+    if (globalWorkspaceStore) {
+      await globalWorkspaceStore.close();
+    }
+    globalWorkspaceStore = new PostgresWorkspaceStore({
+      databaseUrl: config.databaseUrl,
+      schema: config.databaseSchema,
+    });
+    await globalWorkspaceStore.init();
+    config = { ...config, workspaceStore: globalWorkspaceStore };
   }
 
   // Bolt ignores its own OAuth options (clientId, installationStore, ...)
@@ -339,6 +352,10 @@ export function getGlobalInstallationStore():
   return globalInstallationStore;
 }
 
+export function getGlobalWorkspaceStore(): PostgresWorkspaceStore | undefined {
+  return globalWorkspaceStore;
+}
+
 /**
  * Registers every trigger (reaction, message shortcut, slash command) on the
  * app, plus OAuth cleanup handlers.
@@ -349,7 +366,9 @@ export function registerHandlers(app: App, config: Config): void {
   );
   registerReactionTrigger(app, config);
   registerShortcut(app);
-  app.command(COMMAND, (args) => handleMeatproxyCommand(args));
+  app.command(COMMAND, (args) =>
+    handleMeatproxyCommand(args, { callOut, config }),
+  );
 
   const isOAuthMode =
     config.clientId &&
@@ -359,6 +378,7 @@ export function registerHandlers(app: App, config: Config): void {
   if (isOAuthMode) {
     // Slack puts team_id on the event envelope, not inside `event`; Bolt
     // copies it (and the enterprise) onto `context` for these two events.
+    // The workspace's settings go with its installation.
     const deleteInstallation = async (
       context: Context,
       logger: Logger,
@@ -382,6 +402,14 @@ export function registerHandlers(app: App, config: Config): void {
         logger.info(`Deleted installation for team ${teamId} on ${reason}`);
       } catch (err) {
         logger.error(`Error deleting installation for team ${teamId}:`, err);
+      }
+      if (config.workspaceStore) {
+        try {
+          await config.workspaceStore.deleteWorkspace(teamId);
+          logger.info(`Deleted settings for team ${teamId} on ${reason}`);
+        } catch (err) {
+          logger.error(`Error deleting settings for team ${teamId}:`, err);
+        }
       }
     };
 

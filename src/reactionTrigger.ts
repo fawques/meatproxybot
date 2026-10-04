@@ -16,7 +16,16 @@ export function registerReactionTrigger(
 ): void {
   app.event("reaction_added", async ({ event, context, client, logger }) => {
     const teamId: string = context.teamId ?? "";
-    const triggerEmoji = getTriggerEmojiForWorkspace(config, teamId);
+    let triggerEmoji: string;
+    try {
+      triggerEmoji = await getTriggerEmojiForWorkspace(config, teamId);
+    } catch (err) {
+      // A database hiccup should not switch the trigger off entirely.
+      logger.warn(
+        `could not read the trigger emoji for team ${teamId}, using the default: ${String(err)}`,
+      );
+      triggerEmoji = config.triggerEmoji;
+    }
     if (event.reaction !== triggerEmoji) return;
     // Bolt types the item as a message, but Slack also sends reactions on
     // files and file comments.

@@ -43,12 +43,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   const port = parsePort(env.PORT, problems);
 
-  const triggerEmoji = (
-    env.TRIGGER_EMOJI?.trim() || DEFAULT_TRIGGER_EMOJI
-  ).replace(/^:|:$/g, "");
-  if (!/^[a-z0-9_+'-]+$/.test(triggerEmoji)) {
+  const rawTriggerEmoji = env.TRIGGER_EMOJI?.trim() || DEFAULT_TRIGGER_EMOJI;
+  const triggerEmoji = parseEmojiName(rawTriggerEmoji) ?? "";
+  if (!triggerEmoji) {
     problems.push(
-      `TRIGGER_EMOJI must be an emoji name such as "${DEFAULT_TRIGGER_EMOJI}", got "${triggerEmoji}"`,
+      `TRIGGER_EMOJI must be an emoji name such as "${DEFAULT_TRIGGER_EMOJI}", got "${stripColons(rawTriggerEmoji)}"`,
     );
   }
 
@@ -145,6 +144,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return config;
 }
 
+function stripColons(name: string): string {
+  return name.replace(/^:|:$/g, "");
+}
+
+/**
+ * Normalizes an emoji name given as `name` or `:name:`, or returns undefined
+ * if it is not a valid Slack emoji name. `TRIGGER_EMOJI` and
+ * `/meatproxy emoji` share this rule.
+ */
+export function parseEmojiName(raw: string): string | undefined {
+  const name = stripColons(raw.trim());
+  return /^[a-z0-9_+'-]+$/.test(name) ? name : undefined;
+}
+
 function parsePort(value: string | undefined, problems: string[]): number {
   const trimmed = value?.trim();
   if (!trimmed) {
@@ -163,12 +176,12 @@ function parsePort(value: string | undefined, problems: string[]): number {
  * First looks up workspace-specific configuration, then falls back to the
  * global default.
  */
-export function getTriggerEmojiForWorkspace(
-  config: Config,
+export async function getTriggerEmojiForWorkspace(
+  config: Pick<Config, "triggerEmoji" | "workspaceStore">,
   teamId: string,
-): string {
+): Promise<string> {
   if (config.workspaceStore) {
-    const workspaceEmoji = config.workspaceStore.getTriggerEmoji(teamId);
+    const workspaceEmoji = await config.workspaceStore.getTriggerEmoji(teamId);
     if (workspaceEmoji) {
       return workspaceEmoji;
     }

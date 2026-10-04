@@ -151,7 +151,7 @@ describe("reaction trigger", () => {
 
   it("respects workspace-specific trigger emoji from store", async () => {
     const store = new InMemoryWorkspaceStore();
-    store.setTriggerEmoji("T123", "robot_face");
+    await store.setTriggerEmoji("T123", "robot_face");
     const { callOutMock, fire } = setup({
       config: { workspaceStore: store },
       teamId: "T123",
@@ -164,8 +164,8 @@ describe("reaction trigger", () => {
 
   it("allows different workspaces to have different trigger emoji", async () => {
     const store = new InMemoryWorkspaceStore();
-    store.setTriggerEmoji("T123", "robot_face");
-    store.setTriggerEmoji("T456", "tada");
+    await store.setTriggerEmoji("T123", "robot_face");
+    await store.setTriggerEmoji("T456", "tada");
 
     const config = { workspaceStore: store };
     const { callOutMock: callOut1, fire: fire1 } = setup({
@@ -192,12 +192,24 @@ describe("reaction trigger", () => {
 
   it("falls back to global emoji for workspaces without configuration", async () => {
     const store = new InMemoryWorkspaceStore();
-    store.setTriggerEmoji("T123", "robot_face");
+    await store.setTriggerEmoji("T123", "robot_face");
     const { callOutMock, fire } = setup({
       config: { triggerEmoji: "meat_proxy", workspaceStore: store },
       teamId: "T999",
     });
     await fire({ reaction: "meat_proxy" });
     expect(callOutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the global emoji when the store fails", async () => {
+    const store = new InMemoryWorkspaceStore();
+    vi.spyOn(store, "getTriggerEmoji").mockRejectedValue(new Error("db down"));
+    const { callOutMock, logger, fire } = setup({
+      config: { triggerEmoji: "meat_proxy", workspaceStore: store },
+      teamId: "T123",
+    });
+    await fire({ reaction: "meat_proxy" });
+    expect(callOutMock).toHaveBeenCalledTimes(1);
+    expect(logger.warn.mock.calls[0]?.[0]).toContain("db down");
   });
 });
