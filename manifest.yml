@@ -25,6 +25,7 @@ features:
     - command: /meatproxy
       description: Call out a message as unread AI output
       usage_hint: <message link>
+      url: https://meatproxybot.example.com/slack/events
       should_escape: false
   shortcuts:
     - name: "🥩 Call out meat proxy"
@@ -52,7 +53,6 @@ settings:
   interactivity:
     is_enabled: true
     request_url: https://meatproxybot.example.com/slack/events
-  slash_commands_url: https://meatproxybot.example.com/slack/events
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false
