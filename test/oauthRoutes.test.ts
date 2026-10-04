@@ -5,13 +5,19 @@ import type { Config } from "../src/config.js";
 
 const saveInstallation = vi.fn<(installation: unknown) => Promise<void>>();
 
-// createApp builds a PostgresInstallationStore in OAuth mode; swap it for a
-// fake so the tests run without a database.
+// createApp builds a PostgresInstallationStore and a PostgresWorkspaceStore
+// in OAuth mode; swap them for fakes so the tests run without a database.
 vi.mock("../src/installationStore.js", () => ({
   PostgresInstallationStore: class {
     init = vi.fn(() => Promise.resolve());
     close = vi.fn(() => Promise.resolve());
     storeInstallation = saveInstallation;
+  },
+}));
+vi.mock("../src/workspaceStore.js", () => ({
+  PostgresWorkspaceStore: class {
+    init = vi.fn(() => Promise.resolve());
+    close = vi.fn(() => Promise.resolve());
   },
 }));
 

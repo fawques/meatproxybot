@@ -99,38 +99,22 @@ left alone, and errors (for example, the bot is not in the channel) are
 only logged at warn level. Removing the reaction does nothing.
 
 On a workspace without a custom `:meat_proxy:` emoji, this trigger is
-dormant. To activate it, upload a `:meat_proxy:` emoji or configure a
-workspace-specific trigger emoji.
+dormant. To activate it, upload a `:meat_proxy:` emoji or pick another one
+with `/meatproxy emoji <name>`.
 
 #### Per-Workspace Configuration
 
-Each workspace can configure its own trigger emoji independently. The bot uses:
+Each workspace can choose its own trigger emoji with `/meatproxy emoji`
+(see below). The bot uses:
 
-1. Workspace-specific configuration (if configured), or
+1. The workspace's own trigger emoji, if one is set, or
 2. The `TRIGGER_EMOJI` environment variable (defaults to `:meat_proxy:`)
 
-To configure a workspace-specific trigger emoji, the bot stores the setting in
-its workspace installation state. Future versions may include a configuration
-command. For now, workspace-specific emoji can be set by modifying the
-`WorkspaceStore` in your deployment.
-
-Example:
-
-```typescript
-import { InMemoryWorkspaceStore } from "./src/workspaceStore.js";
-
-const store = new InMemoryWorkspaceStore();
-store.setTriggerEmoji("T123456", "robot_face");
-store.setTriggerEmoji("T789012", "tada");
-
-const config = loadConfig();
-config.workspaceStore = store;
-const app = createApp(config);
-```
-
-This allows `T123456` workspace to trigger with `:robot_face:` and `T789012`
-workspace to trigger with `:tada:`, while other workspaces fall back to the
-global `TRIGGER_EMOJI` setting.
+The setting is stored in Postgres, in a `workspace_settings` table next to
+`installations` in `DATABASE_SCHEMA`, so it survives restarts. It is deleted
+with the installation when the workspace uninstalls the app or revokes its
+bot token. Legacy mode (`SLACK_BOT_TOKEN`, no database) has no per-workspace
+settings: every workspace uses `TRIGGER_EMOJI`.
 
 ### Message shortcut (anonymous)
 
@@ -168,6 +152,23 @@ only appear in the bot's audit log.
   usage instead of guessing a message.
 - Links to public and private channel messages and thread replies work. DM
   links do not, and the bot must be in the message's channel.
+
+### `/meatproxy emoji`
+
+Shows or changes the workspace's reaction trigger emoji. Anyone in the
+workspace can run it, and every reply is ephemeral.
+
+- `/meatproxy emoji` shows the current trigger emoji and whether it is the
+  workspace's own setting or the `TRIGGER_EMOJI` default.
+- `/meatproxy emoji <name>` sets it for this workspace. `robot_face` and
+  `:robot_face:` both work; names follow the same rule as `TRIGGER_EMOJI`
+  (lowercase letters, digits, `_`, `-`, `+` and `'`). An invalid name gets
+  an error and nothing is saved.
+- `/meatproxy emoji reset` goes back to `TRIGGER_EMOJI`.
+
+The bot does not check that the emoji exists (that would need the
+`emoji:read` scope). The reaction trigger only works if it does: upload a
+custom emoji with that name if needed.
 
 ## Usage statistics
 

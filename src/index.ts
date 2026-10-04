@@ -1,4 +1,8 @@
-import { createApp, getGlobalInstallationStore } from "./app.js";
+import {
+  createApp,
+  getGlobalInstallationStore,
+  getGlobalWorkspaceStore,
+} from "./app.js";
 import { ConfigError, loadConfig } from "./config.js";
 
 function log(
@@ -63,6 +67,7 @@ async function main(): Promise<void> {
         if (store) {
           await store.close();
         }
+        await getGlobalWorkspaceStore()?.close();
         log("info", "meatproxybot stopped");
         process.exit(0);
       } catch (err) {

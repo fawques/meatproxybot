@@ -4,7 +4,7 @@ import type { Config } from "../src/config.js";
 
 // A stand-in for Postgres that keeps installation rows in memory. It answers
 // the store's upsert, select and delete (matching on enterprise_id only when
-// the SQL does); schema statements return no rows.
+// the SQL does); schema statements and workspace settings return no rows.
 interface Row {
   team_id: string;
   enterprise_id: string;
@@ -17,6 +17,9 @@ const rows = vi.hoisted(() => new Map<string, Row>());
 
 vi.mock("pg", () => {
   const query = (sql: string, params: (string | null)[] = []) => {
+    if (sql.includes("workspace_settings")) {
+      return Promise.resolve({ rows: [] });
+    }
     const key = `${String(params[0])}/${String(params[1])}`;
     if (sql.includes("INSERT INTO")) {
       const [team_id, enterprise_id, bot_token, bot_id, bot_user_id, app_id] =
