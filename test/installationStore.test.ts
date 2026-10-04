@@ -113,6 +113,47 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
     ).rejects.toThrow("No installation for team T1");
   });
 
+  it("deletes a workspace in an Enterprise Grid saved without its enterprise", async () => {
+    // The OAuth redirect saves enterprise_id as '' even inside a Grid, but
+    // Slack's app_uninstalled envelope carries the enterprise.
+    await store.init();
+    await store.storeInstallation(installation("T1", "xoxb-1"));
+    await store.deleteInstallation({
+      teamId: "T1",
+      enterpriseId: "E1",
+      isEnterpriseInstall: false,
+    });
+
+    expect(await rows("T1")).toHaveLength(0);
+  });
+
+  it("deletes a workspace in an Enterprise Grid saved with its enterprise", async () => {
+    await store.init();
+    await store.storeInstallation(installation("T1", "xoxb-1", "E1"));
+    await store.deleteInstallation({
+      teamId: "T1",
+      enterpriseId: "E1",
+      isEnterpriseInstall: false,
+    });
+
+    expect(await rows("T1")).toHaveLength(0);
+  });
+
+  it("deletes an org-wide install only for its enterprise", async () => {
+    await store.init();
+    await store.storeInstallation(installation("T1", "xoxb-e1", "E1"));
+    await store.storeInstallation(installation("T1", "xoxb-e2", "E2"));
+    await store.deleteInstallation({
+      teamId: "T1",
+      enterpriseId: "E1",
+      isEnterpriseInstall: true,
+    });
+
+    const left = await rows("T1");
+    expect(left).toHaveLength(1);
+    expect(left[0]?.enterprise_id).toBe("E2");
+  });
+
   it("migrates a table with duplicate rows to one row per team", async () => {
     // The table as created before the fix, with the duplicates reinstalls left.
     await admin.query(`

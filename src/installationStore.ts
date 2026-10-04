@@ -175,11 +175,21 @@ export class PostgresInstallationStore implements InstallationStore {
   async deleteInstallation(query: InstallationQuery<boolean>): Promise<void> {
     const client = await this.pool.connect();
     try {
-      await client.query(
-        `DELETE FROM "${this.schema}".installations
-         WHERE team_id = $1 AND enterprise_id = $2`,
-        [query.teamId, query.enterpriseId ?? ""],
-      );
+      // A workspace install is identified by its team alone: the OAuth
+      // redirect saves enterprise_id as '' even inside an Enterprise Grid,
+      // so matching on the enterprise would leave the bot token behind.
+      if (query.isEnterpriseInstall) {
+        await client.query(
+          `DELETE FROM "${this.schema}".installations
+           WHERE team_id = $1 AND enterprise_id = $2`,
+          [query.teamId, query.enterpriseId ?? ""],
+        );
+      } else {
+        await client.query(
+          `DELETE FROM "${this.schema}".installations WHERE team_id = $1`,
+          [query.teamId],
+        );
+      }
     } finally {
       client.release();
     }
