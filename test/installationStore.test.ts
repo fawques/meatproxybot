@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Installation } from "@slack/bolt";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PostgresInstallationStore } from "../src/installationStore.js";
@@ -18,13 +19,19 @@ function storeWith(schema: string, encryptionKey: Buffer) {
   });
 }
 
-function installation(teamId: string, token: string, enterpriseId?: string) {
+function installation(
+  teamId: string,
+  token: string,
+  enterpriseId?: string,
+): Installation<"v2", false> {
   return {
     team: { id: teamId },
     enterprise: enterpriseId ? { id: enterpriseId } : undefined,
-    bot: { id: "B1", token },
-    bot_user_id: "U1",
-    app_id: "A1",
+    user: { token: undefined, scopes: undefined, id: "U0" },
+    bot: { id: "B1", token, userId: "U1", scopes: [] },
+    appId: "A1",
+    isEnterpriseInstall: false,
+    authVersion: "v2",
   };
 }
 
@@ -64,52 +71,101 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
 
   it("keeps one row per workspace when it is saved twice", async () => {
     await store.init();
-    await store.save(installation("T1", "xoxb-old"));
-    await store.save(installation("T1", "xoxb-new"));
+    await store.storeInstallation(installation("T1", "xoxb-old"));
+    await store.storeInstallation(installation("T1", "xoxb-new"));
 
     expect(await tokens("T1")).toEqual(["xoxb-new"]);
 
-    const found = await store.find({
+    const found = await store.fetchInstallation({
       teamId: "T1",
+      enterpriseId: undefined,
       isEnterpriseInstall: false,
     });
-    expect(found?.bot).toMatchObject({ token: "xoxb-new" });
-    expect(found?.enterprise).toBeUndefined();
-    expect(found?.is_enterprise_install).toBe(false);
+    expect(found.bot).toEqual({
+      token: "xoxb-new",
+      id: "B1",
+      userId: "U1",
+      scopes: [],
+    });
+    expect(found.enterprise).toBeUndefined();
+    expect(found.isEnterpriseInstall).toBe(false);
+    expect(found.appId).toBe("A1");
   });
 
   it("keeps one row per enterprise workspace when it is saved twice", async () => {
     await store.init();
-    await store.save(installation("T1", "xoxb-old", "E1"));
-    await store.save(installation("T1", "xoxb-new", "E1"));
+    await store.storeInstallation(installation("T1", "xoxb-old", "E1"));
+    await store.storeInstallation(installation("T1", "xoxb-new", "E1"));
 
     expect(await rows("T1")).toHaveLength(1);
-    const found = await store.find({
+    const found = await store.fetchInstallation({
       teamId: "T1",
       isEnterpriseInstall: false,
       enterpriseId: "E1",
     });
-    expect(found?.bot).toMatchObject({ token: "xoxb-new" });
-    expect(found?.enterprise).toEqual({ id: "E1" });
+    expect(found.bot).toMatchObject({ token: "xoxb-new" });
+    expect(found.enterprise).toEqual({ id: "E1" });
   });
 
   it("deletes a non-enterprise installation", async () => {
     await store.init();
-    await store.save(installation("T1", "xoxb-1"));
-    await store.delete({ teamId: "T1", isEnterpriseInstall: false });
+    await store.storeInstallation(installation("T1", "xoxb-1"));
+    await store.deleteInstallation({
+      teamId: "T1",
+      enterpriseId: undefined,
+      isEnterpriseInstall: false,
+    });
 
     expect(await rows("T1")).toHaveLength(0);
-    expect(
-      await store.find({ teamId: "T1", isEnterpriseInstall: false }),
-    ).toBeNull();
+    await expect(
+      store.fetchInstallation({
+        teamId: "T1",
+        enterpriseId: undefined,
+        isEnterpriseInstall: false,
+      }),
+    ).rejects.toThrow("No installation for team T1");
+  });
+
+  it("fetches a workspace in an Enterprise Grid saved without its enterprise", async () => {
+    // The OAuth redirect saves enterprise_id as '' even inside a Grid, but
+    // events from that workspace carry the enterprise.
+    await store.init();
+    await store.storeInstallation(installation("T1", "xoxb-1"));
+
+    const found = await store.fetchInstallation({
+      teamId: "T1",
+      enterpriseId: "E1",
+      isEnterpriseInstall: false,
+    });
+    expect(found.bot).toMatchObject({ token: "xoxb-1" });
+  });
+
+  it("fetches an org-wide install only for its enterprise", async () => {
+    await store.init();
+    await store.storeInstallation(installation("T1", "xoxb-e1", "E1"));
+    await store.storeInstallation(installation("T1", "xoxb-e2", "E2"));
+
+    const found = await store.fetchInstallation({
+      teamId: "T1",
+      enterpriseId: "E2",
+      isEnterpriseInstall: true,
+    });
+    expect(found.bot).toMatchObject({ token: "xoxb-e2" });
+    await expect(
+      store.fetchInstallation({
+        teamId: "T1",
+        enterpriseId: "E3",
+        isEnterpriseInstall: true,
+      }),
+    ).rejects.toThrow("No installation for team T1");
   });
 
   it("deletes a workspace in an Enterprise Grid saved without its enterprise", async () => {
     // The OAuth redirect saves enterprise_id as '' even inside a Grid, but
     // Slack's app_uninstalled envelope carries the enterprise.
     await store.init();
-    await store.save(installation("T1", "xoxb-1"));
-    await store.delete({
+    await store.storeInstallation(installation("T1", "xoxb-1"));
+    await store.deleteInstallation({
       teamId: "T1",
       enterpriseId: "E1",
       isEnterpriseInstall: false,
@@ -120,8 +176,8 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
 
   it("deletes a workspace in an Enterprise Grid saved with its enterprise", async () => {
     await store.init();
-    await store.save(installation("T1", "xoxb-1", "E1"));
-    await store.delete({
+    await store.storeInstallation(installation("T1", "xoxb-1", "E1"));
+    await store.deleteInstallation({
       teamId: "T1",
       enterpriseId: "E1",
       isEnterpriseInstall: false,
@@ -132,9 +188,9 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
 
   it("deletes an org-wide install only for its enterprise", async () => {
     await store.init();
-    await store.save(installation("T1", "xoxb-e1", "E1"));
-    await store.save(installation("T1", "xoxb-e2", "E2"));
-    await store.delete({
+    await store.storeInstallation(installation("T1", "xoxb-e1", "E1"));
+    await store.storeInstallation(installation("T1", "xoxb-e2", "E2"));
+    await store.deleteInstallation({
       teamId: "T1",
       enterpriseId: "E1",
       isEnterpriseInstall: true,
@@ -178,19 +234,19 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
     expect(await rows("T3")).toHaveLength(1);
 
     // The constraint now holds, so a reinstall updates the surviving row.
-    await store.save(installation("T1", "xoxb-t1-reinstall"));
+    await store.storeInstallation(installation("T1", "xoxb-t1-reinstall"));
     expect(await tokens("T1")).toEqual(["xoxb-t1-reinstall"]);
-    const t3 = await store.find({
+    const t3 = await store.fetchInstallation({
       teamId: "T3",
       isEnterpriseInstall: false,
       enterpriseId: "E1",
     });
-    expect(t3?.bot).toMatchObject({ token: "xoxb-t3" });
+    expect(t3.bot).toMatchObject({ token: "xoxb-t3" });
   });
 
   it("never stores a plain-text token", async () => {
     await store.init();
-    await store.save(installation("T1", "xoxb-secret"));
+    await store.storeInstallation(installation("T1", "xoxb-secret"));
 
     const [row] = await rows("T1");
     expect(row?.bot_token).not.toContain("xoxb-");
@@ -204,25 +260,27 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
     );
 
     // Still readable before the migration runs...
-    const before = await store.find({
+    const before = await store.fetchInstallation({
       teamId: "T1",
+      enterpriseId: undefined,
       isEnterpriseInstall: false,
     });
-    expect(before?.bot).toMatchObject({ token: "xoxb-plain" });
+    expect(before.bot).toMatchObject({ token: "xoxb-plain" });
 
     // ...and encrypted by the next startup.
     await store.init();
     expect(await tokens("T1")).toEqual(["xoxb-plain"]);
-    const after = await store.find({
+    const after = await store.fetchInstallation({
       teamId: "T1",
+      enterpriseId: undefined,
       isEnterpriseInstall: false,
     });
-    expect(after?.bot).toMatchObject({ token: "xoxb-plain" });
+    expect(after.bot).toMatchObject({ token: "xoxb-plain" });
   });
 
   it("refuses to start with a key that does not match the stored tokens", async () => {
     await store.init();
-    await store.save(installation("T1", "xoxb-secret"));
+    await store.storeInstallation(installation("T1", "xoxb-secret"));
 
     const wrong = storeWith(schema, otherKey);
     try {
@@ -244,7 +302,11 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
     );
 
     await expect(
-      store.find({ teamId: "T1", isEnterpriseInstall: false }),
+      store.fetchInstallation({
+        teamId: "T1",
+        enterpriseId: undefined,
+        isEnterpriseInstall: false,
+      }),
     ).rejects.toThrow(
       /Workspace T1: .*INSTALLATION_ENCRYPTION_KEY is not the key/,
     );

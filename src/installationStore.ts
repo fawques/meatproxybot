@@ -1,3 +1,8 @@
+import type {
+  Installation,
+  InstallationQuery,
+  InstallationStore,
+} from "@slack/bolt";
 import { Pool, type PoolClient } from "pg";
 import {
   TokenDecryptionError,
@@ -6,12 +11,6 @@ import {
   isEncryptedToken,
   parseEncryptionKey,
 } from "./tokenCrypto.js";
-
-export interface InstallationQuery {
-  teamId: string;
-  isEnterpriseInstall: boolean;
-  enterpriseId?: string;
-}
 
 export interface PostgresInstallationStoreOptions {
   databaseUrl: string;
@@ -29,7 +28,7 @@ interface StoredInstallation {
   app_id: string | null;
 }
 
-export class PostgresInstallationStore {
+export class PostgresInstallationStore implements InstallationStore {
   private pool: Pool;
   private schema: string;
   private encryptionKey: Buffer;
@@ -147,26 +146,18 @@ export class PostgresInstallationStore {
     }
   }
 
-  async save(installation: Record<string, unknown>): Promise<void> {
+  async storeInstallation(installation: Installation): Promise<void> {
+    const teamId = installation.team?.id;
+    const enterpriseId = installation.enterprise?.id ?? "";
+    const bot = installation.bot;
+    if (!teamId || !bot?.token) {
+      throw new Error(
+        "Missing required installation fields: team_id and bot_token",
+      );
+    }
+
     const client = await this.pool.connect();
     try {
-      const team = installation.team as Record<string, unknown> | undefined;
-      const enterprise = installation.enterprise as
-        Record<string, unknown> | undefined;
-      const bot = installation.bot as Record<string, unknown> | undefined;
-      const teamId = team?.id as string | undefined;
-      const enterpriseId = (enterprise?.id as string | undefined) ?? "";
-      const botToken = bot?.token as string | undefined;
-      const botId = bot?.id as string | undefined;
-      const botUserId = installation.bot_user_id as string | undefined;
-      const appId = installation.app_id as string | undefined;
-
-      if (!teamId || !botToken) {
-        throw new Error(
-          "Missing required installation fields: team_id and bot_token",
-        );
-      }
-
       const query = `
         INSERT INTO "${this.schema}".installations
           (team_id, enterprise_id, bot_token, bot_id, bot_user_id, app_id, updated_at)
@@ -182,55 +173,73 @@ export class PostgresInstallationStore {
       await client.query(query, [
         teamId,
         enterpriseId,
-        encryptToken(botToken, this.encryptionKey),
-        botId,
-        botUserId,
-        appId,
+        encryptToken(bot.token, this.encryptionKey),
+        bot.id || null,
+        bot.userId || null,
+        installation.appId ?? null,
       ]);
     } finally {
       client.release();
     }
   }
 
-  async find(
-    query: InstallationQuery,
-  ): Promise<Record<string, unknown> | null> {
+  /**
+   * Returns the workspace's installation. Throws when there is none, which
+   * Bolt reports as a failed authorization.
+   */
+  async fetchInstallation(
+    query: InstallationQuery<boolean>,
+  ): Promise<Installation<"v2", false>> {
     const client = await this.pool.connect();
     try {
-      const result = await client.query(
-        `SELECT * FROM "${this.schema}".installations
-         WHERE team_id = $1 AND enterprise_id = $2
-         ORDER BY updated_at DESC, id DESC
-         LIMIT 1`,
-        [query.teamId, query.enterpriseId ?? ""],
-      );
+      // As in deleteInstallation, a workspace install is found by its team
+      // alone (preferring a row with the matching enterprise): the OAuth
+      // redirect saves enterprise_id as '', but events from a workspace in an
+      // Enterprise Grid carry its enterprise id.
+      const result = query.isEnterpriseInstall
+        ? await client.query(
+            `SELECT * FROM "${this.schema}".installations
+             WHERE team_id = $1 AND enterprise_id = $2
+             ORDER BY updated_at DESC, id DESC
+             LIMIT 1`,
+            [query.teamId, query.enterpriseId ?? ""],
+          )
+        : await client.query(
+            `SELECT * FROM "${this.schema}".installations
+             WHERE team_id = $1
+             ORDER BY enterprise_id = $2 DESC, updated_at DESC, id DESC
+             LIMIT 1`,
+            [query.teamId, query.enterpriseId ?? ""],
+          );
 
-      if (result.rows.length === 0) {
-        return null;
+      const row = result.rows[0] as StoredInstallation | undefined;
+      if (!row) {
+        throw new Error(
+          `No installation for team ${String(query.teamId)} (enterprise ${query.enterpriseId ?? "none"})`,
+        );
       }
 
-      const row = result.rows[0] as StoredInstallation;
       return {
-        app_id: row.app_id,
-        enterprise: row.enterprise_id ? { id: row.enterprise_id } : undefined,
         team: { id: row.team_id },
+        enterprise: row.enterprise_id ? { id: row.enterprise_id } : undefined,
+        user: { token: undefined, scopes: undefined, id: "" },
         bot: {
-          id: row.bot_id,
           token: this.decrypt(row),
           scopes: [],
+          id: row.bot_id ?? "",
+          userId: row.bot_user_id ?? "",
         },
-        bot_user_id: row.bot_user_id,
-        user_id: undefined,
-        incoming_webhook_url: undefined,
-        token_type: "bot",
-        is_enterprise_install: !!row.enterprise_id,
+        ...(row.app_id ? { appId: row.app_id } : {}),
+        tokenType: "bot",
+        isEnterpriseInstall: false,
+        authVersion: "v2",
       };
     } finally {
       client.release();
     }
   }
 
-  async delete(query: InstallationQuery): Promise<void> {
+  async deleteInstallation(query: InstallationQuery<boolean>): Promise<void> {
     const client = await this.pool.connect();
     try {
       // A workspace install is identified by its team alone: the OAuth

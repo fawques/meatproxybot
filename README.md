@@ -45,8 +45,11 @@ You need Node 22.9 or later and a Slack workspace where you can create apps.
 7. **Fill in `.env`:** `cp .env.example .env`, then set `SLACK_SIGNING_SECRET`.
    For OAuth mode (multi-workspace), also set `SLACK_CLIENT_ID`,
    `SLACK_CLIENT_SECRET`, `SLACK_STATE_SECRET`, `PUBLIC_BASE_URL`,
-   `DATABASE_URL`, and `INSTALLATION_ENCRYPTION_KEY` (`openssl rand -base64 32`). For legacy mode (single workspace), set `SLACK_BOT_TOKEN`
-   instead. `.env` is gitignored; never commit it.
+   `DATABASE_URL`, and `INSTALLATION_ENCRYPTION_KEY`
+   (`openssl rand -base64 32`). For legacy mode (single workspace), set
+   `SLACK_BOT_TOKEN` instead; OAuth mode ignores it and uses each
+   workspace's stored token.
+   `.env` is gitignored; never commit it.
 8. **Run it with `npm run dev`** after `npm ci`. It logs a JSON `ready` line
    once listening. For production, `npm run build && npm start`.
 

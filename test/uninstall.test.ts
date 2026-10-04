@@ -11,7 +11,7 @@ vi.mock("../src/installationStore.js", () => ({
   PostgresInstallationStore: class {
     init = vi.fn(() => Promise.resolve());
     close = vi.fn(() => Promise.resolve());
-    delete = deleteInstallation;
+    deleteInstallation = deleteInstallation;
   },
 }));
 

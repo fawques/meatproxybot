@@ -11,7 +11,7 @@ vi.mock("../src/installationStore.js", () => ({
   PostgresInstallationStore: class {
     init = vi.fn(() => Promise.resolve());
     close = vi.fn(() => Promise.resolve());
-    save = saveInstallation;
+    storeInstallation = saveInstallation;
   },
 }));
 vi.mock("../src/workspaceStore.js", () => ({
