@@ -1,15 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CallOutClient, CallOutResult } from "../src/callOut.js";
 import {
+  currentEmojiText,
+  EMOJI_STORE_FAILED_TEXT,
+  EMOJI_UNAVAILABLE_TEXT,
+  emojiResetText,
+  emojiSetText,
   handleMeatproxyCommand,
   INVALID_LINK_TEXT,
+  invalidEmojiText,
   USAGE_TEXT,
   type CommandArgs,
 } from "../src/command.js";
 import { feedbackText } from "../src/feedback.js";
+import {
+  InMemoryWorkspaceStore,
+  type WorkspaceStore,
+} from "../src/workspaceStore.js";
 
 const BOT = "UBOT";
 const INVOKER = "UINVOKER";
+const TEAM = "T123";
 const LINK = "https://acme.slack.com/archives/C0123ABCD/p1700000000123456";
 
 function setup(
@@ -18,6 +29,7 @@ function setup(
     result?: CallOutResult;
     botUserId?: string | undefined;
     respondFails?: boolean;
+    workspaceStore?: WorkspaceStore | undefined;
   } = {},
 ) {
   const events: string[] = [];
@@ -39,14 +51,31 @@ function setup(
   const client = {} as CallOutClient;
   const args: CommandArgs = {
     ack,
-    body: { text, user_id: INVOKER },
+    body: { text, user_id: INVOKER, team_id: TEAM },
     respond,
     context: { botUserId: "botUserId" in opts ? opts.botUserId : BOT },
     client,
     logger,
   };
-  const run = () => handleMeatproxyCommand(args, { callOut });
-  return { run, events, ack, respond, callOut, logger, client };
+  const workspaceStore =
+    "workspaceStore" in opts
+      ? opts.workspaceStore
+      : new InMemoryWorkspaceStore();
+  const config = {
+    triggerEmoji: "meat_proxy",
+    ...(workspaceStore ? { workspaceStore } : {}),
+  };
+  const run = () => handleMeatproxyCommand(args, { callOut, config });
+  return {
+    run,
+    events,
+    ack,
+    respond,
+    callOut,
+    logger,
+    client,
+    store: workspaceStore,
+  };
 }
 
 /** Every respond payload must be ephemeral and must not name the invoker. */
@@ -155,5 +184,97 @@ describe("/meatproxy", () => {
       response_type: "ephemeral",
       text: "Couldn't call that out, sorry.",
     });
+  });
+});
+
+describe("/meatproxy emoji", () => {
+  /** Runs the command and returns its only, ephemeral reply. */
+  async function replyTo(
+    text: string,
+    opts: Parameters<typeof setup>[1] = {},
+  ): Promise<string> {
+    const { run, respond, callOut } = setup(text, opts);
+    await run();
+    expect(callOut).not.toHaveBeenCalled();
+    expect(respond).toHaveBeenCalledOnce();
+    expectAnonymousEphemeral(respond);
+    return respond.mock.calls[0]?.[0].text ?? "";
+  }
+
+  it("shows the default when the workspace has no setting", async () => {
+    expect(await replyTo("emoji")).toBe(
+      currentEmojiText("meat_proxy", "default"),
+    );
+  });
+
+  it("shows the workspace setting", async () => {
+    const store = new InMemoryWorkspaceStore();
+    await store.setTriggerEmoji(TEAM, "robot_face");
+    const reply = await replyTo("  EMOJI  ", { workspaceStore: store });
+    expect(reply).toBe(currentEmojiText("robot_face", "workspace"));
+    expect(reply).toContain(":robot_face:");
+  });
+
+  it.each(["robot_face", ":robot_face:"])(
+    "sets the trigger emoji from %j",
+    async (name) => {
+      const store = new InMemoryWorkspaceStore();
+      const reply = await replyTo(`emoji ${name}`, { workspaceStore: store });
+      expect(reply).toBe(emojiSetText("robot_face"));
+      expect(reply).toContain("only works if that emoji exists");
+      expect(await store.getTriggerEmoji(TEAM)).toBe("robot_face");
+      expect(await store.getTriggerEmoji("T999")).toBeUndefined();
+    },
+  );
+
+  it("resets to the default", async () => {
+    const store = new InMemoryWorkspaceStore();
+    await store.setTriggerEmoji(TEAM, "robot_face");
+    const reply = await replyTo("emoji reset", { workspaceStore: store });
+    expect(reply).toBe(emojiResetText("meat_proxy"));
+    expect(reply).toContain("only works if that emoji exists");
+    expect(await store.getTriggerEmoji(TEAM)).toBeUndefined();
+  });
+
+  it.each(["not an emoji", "Robot_Face", "robot:face", "🤖"])(
+    "rejects %j without saving",
+    async (name) => {
+      const store = new InMemoryWorkspaceStore();
+      await store.setTriggerEmoji(TEAM, "tada");
+      const reply = await replyTo(`emoji ${name}`, { workspaceStore: store });
+      expect(reply).toBe(invalidEmojiText(name));
+      expect(await store.getTriggerEmoji(TEAM)).toBe("tada");
+    },
+  );
+
+  it("explains that it can't be changed without a database", async () => {
+    expect(
+      await replyTo("emoji robot_face", { workspaceStore: undefined }),
+    ).toBe(EMOJI_UNAVAILABLE_TEXT);
+    expect(await replyTo("emoji reset", { workspaceStore: undefined })).toBe(
+      EMOJI_UNAVAILABLE_TEXT,
+    );
+    expect(await replyTo("emoji", { workspaceStore: undefined })).toBe(
+      currentEmojiText("meat_proxy", "default"),
+    );
+  });
+
+  it("logs and answers with an error when the store fails", async () => {
+    const store = new InMemoryWorkspaceStore();
+    vi.spyOn(store, "setTriggerEmoji").mockRejectedValue(new Error("db down"));
+    const { run, respond, logger } = setup("emoji robot_face", {
+      workspaceStore: store,
+    });
+    await run();
+    expect(logger.error).toHaveBeenCalled();
+    expect(respond).toHaveBeenCalledExactlyOnceWith({
+      response_type: "ephemeral",
+      text: EMOJI_STORE_FAILED_TEXT,
+    });
+  });
+
+  it("documents the subcommands in the usage text", () => {
+    expect(USAGE_TEXT).toContain("/meatproxy emoji <name>");
+    expect(USAGE_TEXT).toContain("/meatproxy emoji reset");
   });
 });

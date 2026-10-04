@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../src/config.js";
 
 const deleteInstallation = vi.fn<(query: unknown) => Promise<void>>();
+const deleteWorkspace = vi.fn<(teamId: string) => Promise<void>>();
 
 // createApp builds a PostgresInstallationStore in OAuth mode; swap it for a
 // fake so the tests run without a database.
@@ -11,6 +12,14 @@ vi.mock("../src/installationStore.js", () => ({
     init = vi.fn(() => Promise.resolve());
     close = vi.fn(() => Promise.resolve());
     delete = deleteInstallation;
+  },
+}));
+
+vi.mock("../src/workspaceStore.js", () => ({
+  PostgresWorkspaceStore: class {
+    init = vi.fn(() => Promise.resolve());
+    close = vi.fn(() => Promise.resolve());
+    deleteWorkspace = deleteWorkspace;
   },
 }));
 
@@ -55,6 +64,8 @@ describe("OAuth cleanup handlers", () => {
   beforeEach(async () => {
     deleteInstallation.mockReset();
     deleteInstallation.mockResolvedValue(undefined);
+    deleteWorkspace.mockReset();
+    deleteWorkspace.mockResolvedValue(undefined);
     app = await createApp(config, {
       logLevel: LogLevel.ERROR,
       tokenVerificationEnabled: false,
@@ -68,6 +79,7 @@ describe("OAuth cleanup handlers", () => {
       teamId: "T123",
       isEnterpriseInstall: false,
     });
+    expect(deleteWorkspace).toHaveBeenCalledExactlyOnceWith("T123");
   });
 
   it("passes the enterprise on to the store for an Enterprise Grid workspace", async () => {
@@ -106,6 +118,7 @@ describe("OAuth cleanup handlers", () => {
         tokens: { oauth: ["U111"], bot: ["U999"] },
       }),
     );
+    expect(deleteWorkspace).toHaveBeenCalledExactlyOnceWith("T123");
     expect(deleteInstallation).toHaveBeenCalledOnce();
     expect(deleteInstallation).toHaveBeenCalledWith({
       teamId: "T123",
@@ -126,6 +139,7 @@ describe("OAuth cleanup handlers", () => {
       }),
     );
     expect(deleteInstallation).not.toHaveBeenCalled();
+    expect(deleteWorkspace).not.toHaveBeenCalled();
   });
 
   it("does not throw when the store fails to delete", async () => {
@@ -133,5 +147,15 @@ describe("OAuth cleanup handlers", () => {
     await expect(
       send(app, envelope({ type: "app_uninstalled" })),
     ).resolves.toBeUndefined();
+    // The settings still go when the installation could not be deleted.
+    expect(deleteWorkspace).toHaveBeenCalledExactlyOnceWith("T123");
+  });
+
+  it("does not throw when the settings fail to delete", async () => {
+    deleteWorkspace.mockRejectedValue(new Error("db down"));
+    await expect(
+      send(app, envelope({ type: "app_uninstalled" })),
+    ).resolves.toBeUndefined();
+    expect(deleteInstallation).toHaveBeenCalledOnce();
   });
 });

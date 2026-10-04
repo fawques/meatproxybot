@@ -75,6 +75,38 @@ describe("site field sync", () => {
 
     expect(installFieldsInPolicy.sort()).toEqual(expectedInstallFields.sort());
   });
+
+  it("workspace settings fields in policy match the stored columns", async () => {
+    const privacyHtml = await fs.readFile(
+      path.join(process.cwd(), "site", "privacy", "index.html"),
+      "utf-8",
+    );
+
+    const settingsSection = privacyHtml.match(
+      /<ul data-fields="workspace_settings">([\s\S]*?)<\/ul>/,
+    )?.[1];
+    expect(settingsSection).toBeDefined();
+
+    const settingsFieldsInPolicy = Array.from(
+      (settingsSection ?? "").matchAll(/<code>([^<]+)<\/code>/g),
+    ).map((m) => m[1]);
+
+    // Expected columns of workspace_settings in src/workspaceStore.ts
+    const workspaceStore = await fs.readFile(
+      path.join(process.cwd(), "src", "workspaceStore.ts"),
+      "utf-8",
+    );
+    const columns = Array.from(
+      (
+        workspaceStore.match(
+          /CREATE TABLE IF NOT EXISTS [^(]*\(([\s\S]*?)\);/,
+        )?.[1] ?? ""
+      ).matchAll(/^\s*([a-z_]+) /gm),
+    ).map((m) => m[1]);
+    expect(columns.length).toBeGreaterThan(0);
+
+    expect(settingsFieldsInPolicy.sort()).toEqual(columns.sort());
+  });
 });
 
 /**

@@ -3,6 +3,7 @@ import {
   ConfigError,
   loadConfig,
   getTriggerEmojiForWorkspace,
+  parseEmojiName,
 } from "../src/config.js";
 import { InMemoryWorkspaceStore } from "../src/workspaceStore.js";
 
@@ -135,9 +136,9 @@ describe("loadConfig", () => {
 });
 
 describe("getTriggerEmojiForWorkspace", () => {
-  it("returns workspace-specific emoji when configured", () => {
+  it("returns workspace-specific emoji when configured", async () => {
     const store = new InMemoryWorkspaceStore();
-    store.setTriggerEmoji("T123", "robot_face");
+    await store.setTriggerEmoji("T123", "robot_face");
     const config = {
       slackBotToken: "xoxb-123",
       slackSigningSecret: "secret-123",
@@ -146,10 +147,12 @@ describe("getTriggerEmojiForWorkspace", () => {
       databaseSchema: "meatproxybot_prod",
       workspaceStore: store,
     };
-    expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("robot_face");
+    expect(await getTriggerEmojiForWorkspace(config, "T123")).toBe(
+      "robot_face",
+    );
   });
 
-  it("falls back to global trigger emoji when workspace has no configuration", () => {
+  it("falls back to global trigger emoji when workspace has no configuration", async () => {
     const store = new InMemoryWorkspaceStore();
     const config = {
       slackBotToken: "xoxb-123",
@@ -159,10 +162,12 @@ describe("getTriggerEmojiForWorkspace", () => {
       databaseSchema: "meatproxybot_prod",
       workspaceStore: store,
     };
-    expect(getTriggerEmojiForWorkspace(config, "T999")).toBe("meat_proxy");
+    expect(await getTriggerEmojiForWorkspace(config, "T999")).toBe(
+      "meat_proxy",
+    );
   });
 
-  it("uses global emoji when no workspace store is configured", () => {
+  it("uses global emoji when no workspace store is configured", async () => {
     const config = {
       slackBotToken: "xoxb-123",
       slackSigningSecret: "secret-123",
@@ -170,13 +175,15 @@ describe("getTriggerEmojiForWorkspace", () => {
       triggerEmoji: "meat_proxy",
       databaseSchema: "meatproxybot_prod",
     };
-    expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("meat_proxy");
+    expect(await getTriggerEmojiForWorkspace(config, "T123")).toBe(
+      "meat_proxy",
+    );
   });
 
-  it("allows different workspaces to use different emoji", () => {
+  it("allows different workspaces to use different emoji", async () => {
     const store = new InMemoryWorkspaceStore();
-    store.setTriggerEmoji("T123", "robot_face");
-    store.setTriggerEmoji("T456", "tada");
+    await store.setTriggerEmoji("T123", "robot_face");
+    await store.setTriggerEmoji("T456", "tada");
     const config = {
       slackBotToken: "xoxb-123",
       slackSigningSecret: "secret-123",
@@ -185,8 +192,30 @@ describe("getTriggerEmojiForWorkspace", () => {
       databaseSchema: "meatproxybot_prod",
       workspaceStore: store,
     };
-    expect(getTriggerEmojiForWorkspace(config, "T123")).toBe("robot_face");
-    expect(getTriggerEmojiForWorkspace(config, "T456")).toBe("tada");
-    expect(getTriggerEmojiForWorkspace(config, "T999")).toBe("meat_proxy");
+    expect(await getTriggerEmojiForWorkspace(config, "T123")).toBe(
+      "robot_face",
+    );
+    expect(await getTriggerEmojiForWorkspace(config, "T456")).toBe("tada");
+    expect(await getTriggerEmojiForWorkspace(config, "T999")).toBe(
+      "meat_proxy",
+    );
   });
+});
+
+describe("parseEmojiName", () => {
+  it.each([
+    ["robot_face", "robot_face"],
+    [":robot_face:", "robot_face"],
+    ["  :+1:  ", "+1"],
+    ["man-woman-boy", "man-woman-boy"],
+  ])("accepts %j as %j", (raw, name) => {
+    expect(parseEmojiName(raw)).toBe(name);
+  });
+
+  it.each(["", "::", "not an emoji", "Robot_Face", "robot:face", "🤖"])(
+    "rejects %j",
+    (raw) => {
+      expect(parseEmojiName(raw)).toBeUndefined();
+    },
+  );
 });

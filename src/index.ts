@@ -1,6 +1,7 @@
 import {
   createApp,
   getGlobalInstallationStore,
+  getGlobalWorkspaceStore,
   startBackupScheduler,
   getBackupCleanup,
 } from "./app.js";
@@ -74,6 +75,7 @@ async function main(): Promise<void> {
         if (store) {
           await store.close();
         }
+        await getGlobalWorkspaceStore()?.close();
         log("info", "meatproxybot stopped");
         process.exit(0);
       } catch (err) {
