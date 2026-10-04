@@ -160,6 +160,16 @@ code {
   color: #222;
 }
 
+.screenshot {
+  display: block;
+  width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background-color: #fff;
+}
+
 .screenshot-placeholder {
   background-color: #e8e8e8;
   border: 2px dashed #999;
