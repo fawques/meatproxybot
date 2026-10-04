@@ -34,6 +34,7 @@ export function registerReactionTrigger(
         target,
         invoker: event.user,
         trigger: "reaction",
+        teamId: context.teamId,
       });
       if (result.status === "error") {
         logger.warn(

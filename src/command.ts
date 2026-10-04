@@ -18,7 +18,7 @@ export interface CommandArgs {
     response_type: "ephemeral";
     text: string;
   }) => Promise<unknown>;
-  context: { botUserId?: string | undefined };
+  context: { botUserId?: string | undefined; teamId?: string | undefined };
   client: CallOutClient;
   logger: { error: (...msg: unknown[]) => void };
 }
@@ -70,6 +70,7 @@ export async function handleMeatproxyCommand(
     target,
     invoker: body.user_id,
     trigger: "command",
+    teamId: context.teamId,
   });
   await reply(feedbackText(result));
 }

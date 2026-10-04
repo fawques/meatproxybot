@@ -1,5 +1,6 @@
 import type { webApi } from "@slack/bolt";
 import { pickCallout, renderCallout } from "./callouts.js";
+import type { UsageEvent } from "./usage.js";
 
 /** The reaction the bot leaves on a message it called out. */
 export const RESPONSE_EMOJI = "cut_of_meat";
@@ -38,6 +39,13 @@ export interface CallOutOptions {
   /** The user who triggered the callout. Logged, never posted. */
   invoker: string;
   trigger: CallOutTrigger;
+  /** The workspace the callout happens in, for usage tracking. */
+  teamId?: string | undefined;
+  /**
+   * Stores the callout for the weekly usage stats. Unset when there is no
+   * database (single-workspace mode). A failure is logged, never thrown.
+   */
+  recordUsage?: ((event: UsageEvent) => Promise<void>) | undefined;
   /** Writes the audit log line. Defaults to stdout. */
   log?: (line: string) => void;
   /** Random source for the callout pick, injectable for tests. */
@@ -84,6 +92,24 @@ export async function callOut(options: CallOutOptions): Promise<CallOutResult> {
       ...(result.status === "error" ? { reason: result.reason } : {}),
     }),
   );
+  if (options.recordUsage && options.teamId) {
+    try {
+      await options.recordUsage({
+        teamId: options.teamId,
+        trigger,
+        status: result.status,
+        invoker,
+      });
+    } catch (err) {
+      log(
+        JSON.stringify({
+          event: "usage_record_failed",
+          trigger,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  }
   return result;
 }
 

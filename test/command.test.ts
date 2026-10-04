@@ -41,7 +41,10 @@ function setup(
     ack,
     body: { text, user_id: INVOKER },
     respond,
-    context: { botUserId: "botUserId" in opts ? opts.botUserId : BOT },
+    context: {
+      botUserId: "botUserId" in opts ? opts.botUserId : BOT,
+      teamId: "T1",
+    },
     client,
     logger,
   };
@@ -71,6 +74,7 @@ describe("/meatproxy", () => {
       target: { channel: "C0123ABCD", ts: "1700000000.123456" },
       invoker: INVOKER,
       trigger: "command",
+      teamId: "T1",
     });
   });
 

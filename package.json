@@ -17,7 +17,8 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check:submission": "tsx src/check-submission.ts"
+    "check:submission": "tsx src/check-submission.ts",
+    "stats": "node --env-file-if-exists=.env dist/stats.js"
   },
   "dependencies": {
     "@slack/bolt": "^5.1.0",

@@ -6,12 +6,14 @@ import {
   type Context,
   type Logger,
 } from "@slack/bolt";
+import { callOut } from "./callOut.js";
 import { COMMAND, handleMeatproxyCommand } from "./command.js";
 import type { Config } from "./config.js";
 import { registerReactionTrigger } from "./reactionTrigger.js";
 import { registerShortcut } from "./shortcut.js";
 import { PostgresInstallationStore } from "./installationStore.js";
 import { scheduleNightlyBackup } from "./backup.js";
+import type { UsageEvent } from "./usage.js";
 
 export interface CreateAppOptions {
   logLevel?: LogLevel;
@@ -286,15 +288,29 @@ export function registerHandlers(app: App, config: Config): void {
   app.logger.debug(
     `registering handlers (trigger emoji :${config.triggerEmoji}:)`,
   );
-  registerReactionTrigger(app, config);
-  registerShortcut(app);
-  app.command(COMMAND, (args) => handleMeatproxyCommand(args));
-
   const isOAuthMode =
     config.clientId &&
     config.clientSecret &&
     config.stateSecret &&
     config.databaseUrl;
+
+  // Every trigger records its callouts for the weekly usage stats, when
+  // there is a database to record them in.
+  // The store is looked up per callout: createApp replaces it on re-init.
+  const recordUsage = isOAuthMode
+    ? async (event: UsageEvent) => {
+        await getGlobalInstallationStore()?.recordUsage(event);
+      }
+    : undefined;
+  const callOutWithUsage: typeof callOut = (options) =>
+    callOut({ ...options, recordUsage });
+
+  registerReactionTrigger(app, config, callOutWithUsage);
+  registerShortcut(app, { callOut: callOutWithUsage });
+  app.command(COMMAND, (args) =>
+    handleMeatproxyCommand(args, { callOut: callOutWithUsage }),
+  );
+
   if (isOAuthMode) {
     // Slack puts team_id on the event envelope, not inside `event`; Bolt
     // copies it (and the enterprise) onto `context` for these two events.

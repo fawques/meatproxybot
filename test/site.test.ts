@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { promises as fs } from "fs";
 import * as path from "path";
+import { USAGE_RETENTION_DAYS } from "../src/usage.js";
 
 /**
  * Test that the privacy policy lists match the actual audit fields and
@@ -74,6 +75,36 @@ describe("site field sync", () => {
     ];
 
     expect(installFieldsInPolicy.sort()).toEqual(expectedInstallFields.sort());
+  });
+
+  it("usage fields in policy match the usage_events columns", async () => {
+    const privacyHtml = await fs.readFile(
+      path.join(process.cwd(), "site", "privacy", "index.html"),
+      "utf-8",
+    );
+
+    const usageMatch = privacyHtml.match(
+      /<ul data-fields="usage">([\s\S]*?)<\/ul>/,
+    );
+    expect(usageMatch).toBeTruthy();
+
+    const usageFieldsInPolicy = Array.from(
+      (usageMatch?.[1] ?? "").matchAll(/<code>([^<]+)<\/code>/g),
+    ).map((m) => m[1]);
+
+    // Expected columns from src/usage.ts (besides the row id)
+    const expectedUsageFields = [
+      "team_id",
+      "trigger",
+      "status",
+      "invoker_hash",
+      "created_at",
+    ];
+
+    expect(usageFieldsInPolicy.sort()).toEqual(expectedUsageFields.sort());
+    expect(privacyHtml.replace(/\s+/g, " ")).toContain(
+      `Usage records are deleted ${String(USAGE_RETENTION_DAYS)} days after the callout`,
+    );
   });
 });
 

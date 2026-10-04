@@ -91,6 +91,7 @@ describe("reaction trigger", () => {
       target: { channel: CHANNEL, ts: TS },
       invoker: REACTOR,
       trigger: "reaction",
+      teamId: "T000",
     });
     expect(logger.warn).not.toHaveBeenCalled();
   });
