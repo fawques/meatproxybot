@@ -1,5 +1,11 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { App, LogLevel, ExpressReceiver } from "@slack/bolt";
+import {
+  App,
+  LogLevel,
+  ExpressReceiver,
+  type Context,
+  type Logger,
+} from "@slack/bolt";
 import { COMMAND, handleMeatproxyCommand } from "./command.js";
 import type { Config } from "./config.js";
 import { registerReactionTrigger } from "./reactionTrigger.js";
@@ -289,38 +295,44 @@ export function registerHandlers(app: App, config: Config): void {
     config.stateSecret &&
     config.databaseUrl;
   if (isOAuthMode) {
-    app.event("app_uninstalled", async ({ event, logger }) => {
+    // Slack puts team_id on the event envelope, not inside `event`; Bolt
+    // copies it (and the enterprise) onto `context` for these two events.
+    const deleteInstallation = async (
+      context: Context,
+      logger: Logger,
+      reason: string,
+    ): Promise<void> => {
       const store = getGlobalInstallationStore();
-      const teamId = (event as unknown as Record<string, unknown>).team_id;
-      if (store && teamId && typeof teamId === "string") {
-        try {
-          await store.delete({
-            teamId,
-            isEnterpriseInstall: false,
-          });
-          logger.info(`Deleted installation for team ${teamId}`);
-        } catch (err) {
-          logger.error(`Error deleting installation for team ${teamId}:`, err);
-        }
+      const { teamId, enterpriseId, isEnterpriseInstall } = context;
+      if (!store) {
+        return;
       }
+      if (!teamId) {
+        logger.warn(`Cannot delete installation on ${reason}: no team id`);
+        return;
+      }
+      try {
+        await store.delete({
+          teamId,
+          isEnterpriseInstall,
+          ...(enterpriseId ? { enterpriseId } : {}),
+        });
+        logger.info(`Deleted installation for team ${teamId} on ${reason}`);
+      } catch (err) {
+        logger.error(`Error deleting installation for team ${teamId}:`, err);
+      }
+    };
+
+    app.event("app_uninstalled", async ({ context, logger }) => {
+      await deleteInstallation(context, logger, "uninstall");
     });
 
-    app.event("tokens_revoked", async ({ event, logger }) => {
-      const store = getGlobalInstallationStore();
-      const teamId = (event as unknown as Record<string, unknown>).team_id;
-      if (store && teamId && typeof teamId === "string") {
-        try {
-          await store.delete({
-            teamId,
-            isEnterpriseInstall: false,
-          });
-          logger.info(
-            `Deleted installation for team ${teamId} due to token revocation`,
-          );
-        } catch (err) {
-          logger.error(`Error deleting installation for team ${teamId}:`, err);
-        }
+    app.event("tokens_revoked", async ({ event, context, logger }) => {
+      // Revoking only user tokens leaves the bot installed.
+      if (!event.tokens.bot?.length) {
+        return;
       }
+      await deleteInstallation(context, logger, "bot token revocation");
     });
   }
 }
