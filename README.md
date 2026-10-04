@@ -83,6 +83,17 @@ them at run time. Without them the container exits with status 1 and logs
 which variables are missing. The container includes a health check that
 queries the `/healthz` endpoint.
 
+### After installing
+
+In OAuth mode, a successful install sends the browser back into Slack
+(`slack://app?team=<team>&id=<app>`), with a fallback page linking to Slack
+and the landing page. The installer also gets a welcome DM explaining how to
+invite the bot, the three triggers and the trigger emoji. The DM shows up in
+the app's _Messages_ tab, which `manifest.yml` enables: if your app was
+created from an older manifest, re-apply `manifest.yml` under _App
+Manifest_ in the Slack app settings. A failed DM is logged at warn level and
+does not fail the install.
+
 ## Usage
 
 ### Reaction trigger (not anonymous)

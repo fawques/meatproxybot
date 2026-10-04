@@ -18,6 +18,12 @@ display_information:
     poster is mentioned so they know to read their message.
   background_color: "#8b1a1a"
 features:
+  # The Messages tab is where the welcome DM to the installer shows up.
+  # Read-only: the bot does not answer DMs.
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: true
   bot_user:
     display_name: meatproxybot
     always_online: true

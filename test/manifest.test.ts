@@ -5,6 +5,10 @@ import { BOT_SCOPES } from "../src/scopes.js";
 
 interface Manifest {
   features: {
+    app_home?: {
+      messages_tab_enabled?: boolean;
+      messages_tab_read_only_enabled?: boolean;
+    };
     slash_commands: { command: string; url: string; usage_hint?: string }[];
     shortcuts: { name: string; type: string; callback_id: string }[];
   };
@@ -99,6 +103,13 @@ describe("manifest.yml", () => {
         expect(manifest.features.shortcuts.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("enables the App Home Messages tab for the welcome DM", () => {
+    expect(manifest.features.app_home?.messages_tab_enabled).toBe(true);
+    expect(manifest.features.app_home?.messages_tab_read_only_enabled).toBe(
+      true,
+    );
   });
 
   it("declares the /meatproxy slash command", () => {
