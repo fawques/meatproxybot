@@ -155,11 +155,12 @@ export class PostgresInstallationStore {
       let sql = `DELETE FROM "${this.schema}".installations WHERE team_id = $1`;
       const params: (string | null)[] = [query.teamId];
 
-      if (query.enterpriseId) {
+      // A workspace install is identified by its team alone: the OAuth
+      // redirect saves enterprise_id as NULL even inside an Enterprise Grid,
+      // so filtering on it would leave the bot token behind.
+      if (query.isEnterpriseInstall && query.enterpriseId) {
         sql += ` AND enterprise_id = $2`;
         params.push(query.enterpriseId);
-      } else {
-        sql += ` AND enterprise_id IS NULL`;
       }
 
       await client.query(sql, params);
