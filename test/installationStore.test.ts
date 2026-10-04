@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Installation } from "@slack/bolt";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PostgresInstallationStore } from "../src/installationStore.js";
@@ -7,13 +8,19 @@ import { PostgresInstallationStore } from "../src/installationStore.js";
 // one); skipped otherwise. Each test gets its own schema.
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
-function installation(teamId: string, token: string, enterpriseId?: string) {
+function installation(
+  teamId: string,
+  token: string,
+  enterpriseId?: string,
+): Installation<"v2", false> {
   return {
     team: { id: teamId },
     enterprise: enterpriseId ? { id: enterpriseId } : undefined,
-    bot: { id: "B1", token },
-    bot_user_id: "U1",
-    app_id: "A1",
+    user: { token: undefined, scopes: undefined, id: "U0" },
+    bot: { id: "B1", token, userId: "U1", scopes: [] },
+    appId: "A1",
+    isEnterpriseInstall: false,
+    authVersion: "v2",
   };
 }
 
@@ -49,46 +56,61 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
 
   it("keeps one row per workspace when it is saved twice", async () => {
     await store.init();
-    await store.save(installation("T1", "xoxb-old"));
-    await store.save(installation("T1", "xoxb-new"));
+    await store.storeInstallation(installation("T1", "xoxb-old"));
+    await store.storeInstallation(installation("T1", "xoxb-new"));
 
     const stored = await rows("T1");
     expect(stored).toHaveLength(1);
     expect(stored[0]?.bot_token).toBe("xoxb-new");
 
-    const found = await store.find({
+    const found = await store.fetchInstallation({
       teamId: "T1",
+      enterpriseId: undefined,
       isEnterpriseInstall: false,
     });
-    expect(found?.bot).toMatchObject({ token: "xoxb-new" });
-    expect(found?.enterprise).toBeUndefined();
-    expect(found?.is_enterprise_install).toBe(false);
+    expect(found.bot).toEqual({
+      token: "xoxb-new",
+      id: "B1",
+      userId: "U1",
+      scopes: [],
+    });
+    expect(found.enterprise).toBeUndefined();
+    expect(found.isEnterpriseInstall).toBe(false);
+    expect(found.appId).toBe("A1");
   });
 
   it("keeps one row per enterprise workspace when it is saved twice", async () => {
     await store.init();
-    await store.save(installation("T1", "xoxb-old", "E1"));
-    await store.save(installation("T1", "xoxb-new", "E1"));
+    await store.storeInstallation(installation("T1", "xoxb-old", "E1"));
+    await store.storeInstallation(installation("T1", "xoxb-new", "E1"));
 
     expect(await rows("T1")).toHaveLength(1);
-    const found = await store.find({
+    const found = await store.fetchInstallation({
       teamId: "T1",
       isEnterpriseInstall: false,
       enterpriseId: "E1",
     });
-    expect(found?.bot).toMatchObject({ token: "xoxb-new" });
-    expect(found?.enterprise).toEqual({ id: "E1" });
+    expect(found.bot).toMatchObject({ token: "xoxb-new" });
+    expect(found.enterprise).toEqual({ id: "E1" });
   });
 
   it("deletes a non-enterprise installation", async () => {
     await store.init();
-    await store.save(installation("T1", "xoxb-1"));
-    await store.delete({ teamId: "T1", isEnterpriseInstall: false });
+    await store.storeInstallation(installation("T1", "xoxb-1"));
+    await store.deleteInstallation({
+      teamId: "T1",
+      enterpriseId: undefined,
+      isEnterpriseInstall: false,
+    });
 
     expect(await rows("T1")).toHaveLength(0);
-    expect(
-      await store.find({ teamId: "T1", isEnterpriseInstall: false }),
-    ).toBeNull();
+    await expect(
+      store.fetchInstallation({
+        teamId: "T1",
+        enterpriseId: undefined,
+        isEnterpriseInstall: false,
+      }),
+    ).rejects.toThrow("No installation for team T1");
   });
 
   it("migrates a table with duplicate rows to one row per team", async () => {
@@ -126,15 +148,15 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
     expect(await rows("T3")).toHaveLength(1);
 
     // The constraint now holds, so a reinstall updates the surviving row.
-    await store.save(installation("T1", "xoxb-t1-reinstall"));
+    await store.storeInstallation(installation("T1", "xoxb-t1-reinstall"));
     const after = await rows("T1");
     expect(after).toHaveLength(1);
     expect(after[0]?.bot_token).toBe("xoxb-t1-reinstall");
-    const t3 = await store.find({
+    const t3 = await store.fetchInstallation({
       teamId: "T3",
       isEnterpriseInstall: false,
       enterpriseId: "E1",
     });
-    expect(t3?.bot).toMatchObject({ token: "xoxb-t3" });
+    expect(t3.bot).toMatchObject({ token: "xoxb-t3" });
   });
 });
