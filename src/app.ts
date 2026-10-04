@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   App,
   LogLevel,
@@ -13,7 +13,6 @@ import { registerReactionTrigger } from "./reactionTrigger.js";
 import { registerShortcut } from "./shortcut.js";
 import { PostgresInstallationStore } from "./installationStore.js";
 import { PostgresWorkspaceStore } from "./workspaceStore.js";
-import { scheduleNightlyBackup } from "./backup.js";
 
 export interface CreateAppOptions {
   logLevel?: LogLevel;
@@ -26,26 +25,34 @@ export interface CreateAppOptions {
 
 let globalInstallationStore: PostgresInstallationStore | undefined;
 let globalWorkspaceStore: PostgresWorkspaceStore | undefined;
-let globalBackupCleanup: (() => void) | undefined;
 
 const STATE_TIMEOUT_SECONDS = 600;
+/**
+ * Holds the state's nonce in the browser that started the install, so a
+ * callback only succeeds in that same browser (OAuth CSRF protection).
+ */
+export const STATE_COOKIE_NAME = "meatproxybot_oauth_state";
 const OAUTH_SCOPES =
   "chat:write reactions:read reactions:write commands channels:history groups:history";
 
-function generateSignedState(stateSecret: string): string {
+function generateSignedState(stateSecret: string): {
+  state: string;
+  nonce: string;
+} {
   const nonce = randomBytes(16).toString("hex");
   const timestamp = Date.now().toString();
   const payload = `${nonce}.${timestamp}`;
   const signature = createHmac("sha256", stateSecret)
     .update(payload)
     .digest("hex");
-  return Buffer.from(`${payload}.${signature}`).toString("base64url");
+  const state = Buffer.from(`${payload}.${signature}`).toString("base64url");
+  return { state, nonce };
 }
 
 function validateSignedState(
   state: string,
   stateSecret: string,
-): { valid: boolean; error?: string } {
+): { valid: boolean; nonce?: string; error?: string } {
   try {
     const decoded = Buffer.from(state, "base64url").toString("utf8");
     const parts = decoded.split(".");
@@ -78,11 +85,40 @@ function validateSignedState(
       return { valid: false, error: "State expired" };
     }
 
-    return { valid: true };
+    return { valid: true, nonce };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     return { valid: false, error: `Failed to validate state: ${errorMsg}` };
   }
+}
+
+function stateCookie(path: string, value: string, maxAge: number): string {
+  return (
+    `${STATE_COOKIE_NAME}=${value}; Max-Age=${String(maxAge)}; Path=${path}; ` +
+    "HttpOnly; Secure; SameSite=Lax"
+  );
+}
+
+function readCookie(
+  header: string | undefined,
+  name: string,
+): string | undefined {
+  for (const part of (header ?? "").split(";")) {
+    const eq = part.indexOf("=");
+    if (eq !== -1 && part.slice(0, eq).trim() === name) {
+      return part.slice(eq + 1).trim();
+    }
+  }
+  return undefined;
+}
+
+function nonceMatches(cookieNonce: string | undefined, nonce: string): boolean {
+  if (!cookieNonce) {
+    return false;
+  }
+  const a = Buffer.from(cookieNonce);
+  const b = Buffer.from(nonce);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /**
@@ -112,6 +148,7 @@ export async function createApp(
     globalInstallationStore = new PostgresInstallationStore({
       databaseUrl: config.databaseUrl,
       schema: config.databaseSchema,
+      encryptionKey: config.encryptionKey ?? "",
     });
     await globalInstallationStore.init();
 
@@ -151,16 +188,21 @@ export async function createApp(
     const clientId = config.clientId;
     const clientSecret = config.clientSecret;
     const publicBaseUrl = config.publicBaseUrl;
+    // Scope the state cookie to the bot's own path on a shared host.
+    const cookiePath = new URL(publicBaseUrl).pathname || "/";
 
     receiver.router.get("/slack/install", (_req, res) => {
-      const state = generateSignedState(stateSecret);
+      const { state, nonce } = generateSignedState(stateSecret);
       const redirectUri = `${publicBaseUrl}/slack/oauth_redirect`;
       const url =
         `https://slack.com/oauth/v2/authorize?client_id=${clientId}&` +
         `scope=${encodeURIComponent(OAUTH_SCOPES)}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `state=${encodeURIComponent(state)}`;
-      res.writeHead(302, { Location: url });
+      res.writeHead(302, {
+        Location: url,
+        "Set-Cookie": stateCookie(cookiePath, nonce, STATE_TIMEOUT_SECONDS),
+      });
       res.end();
     });
 
@@ -169,6 +211,9 @@ export async function createApp(
         string | undefined;
       const stateParam = (_req.query as Record<string, unknown> | undefined)
         ?.state as string | undefined;
+      const cookieNonce = readCookie(_req.headers.cookie, STATE_COOKIE_NAME);
+      // The cookie is single-use: every callback response clears it.
+      res.setHeader("Set-Cookie", stateCookie(cookiePath, "", 0));
 
       if (!code || !stateParam) {
         res.writeHead(400, { "Content-Type": "text/plain" });
@@ -182,6 +227,18 @@ export async function createApp(
         app.logger.warn(`OAuth state validation failed: ${errorMsg}`);
         res.writeHead(400, { "Content-Type": "text/plain" });
         res.end(`OAuth state validation failed: ${errorMsg}`);
+        return;
+      }
+
+      if (!nonceMatches(cookieNonce, stateValidation.nonce ?? "")) {
+        app.logger.warn(
+          "OAuth state validation failed: state does not match this browser",
+        );
+        res.writeHead(400, { "Content-Type": "text/plain" });
+        res.end(
+          "OAuth state validation failed: state does not match this browser. " +
+            "Start the installation again from the same browser.",
+        );
         return;
       }
 
@@ -259,39 +316,6 @@ export function getGlobalInstallationStore():
 
 export function getGlobalWorkspaceStore(): PostgresWorkspaceStore | undefined {
   return globalWorkspaceStore;
-}
-
-/**
- * Starts the nightly backup scheduler if a database path is configured.
- * Returns a cleanup function to stop the scheduler.
- */
-export function startBackupScheduler(
-  config: Config,
-  logger: (
-    level: string,
-    msg: string,
-    fields?: Record<string, unknown>,
-  ) => void,
-): (() => void) | null {
-  if (!config.installationDbPath) {
-    return null;
-  }
-
-  const backupDir = config.installationDbPath.replace(/[^/]*$/, "backups");
-  globalBackupCleanup = scheduleNightlyBackup(
-    {
-      dbPath: config.installationDbPath,
-      backupDir,
-      maxBackups: 7,
-    },
-    logger,
-  );
-
-  return globalBackupCleanup;
-}
-
-export function getBackupCleanup(): (() => void) | undefined {
-  return globalBackupCleanup;
 }
 
 /**

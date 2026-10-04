@@ -7,6 +7,8 @@ import {
 } from "../src/config.js";
 import { InMemoryWorkspaceStore } from "../src/workspaceStore.js";
 
+const KEY = Buffer.alloc(32, 7).toString("base64");
+
 const valid = {
   SLACK_BOT_TOKEN: "xoxb-123",
   SLACK_SIGNING_SECRET: "my-signing-secret",
@@ -88,6 +90,7 @@ describe("loadConfig", () => {
       SLACK_CLIENT_SECRET: "my-client-secret",
       SLACK_STATE_SECRET: "my-state-secret",
       DATABASE_URL: "postgresql://user:pass@localhost/db",
+      INSTALLATION_ENCRYPTION_KEY: KEY,
     };
 
     it("requires PUBLIC_BASE_URL in OAuth mode", () => {
@@ -129,7 +132,41 @@ describe("loadConfig", () => {
           SLACK_CLIENT_ID: "id",
         }),
       ).toThrow(
-        /Either OAuth mode.*SLACK_CLIENT_SECRET, SLACK_STATE_SECRET, DATABASE_URL, PUBLIC_BASE_URL.*must be configured/,
+        /Either OAuth mode.*SLACK_CLIENT_SECRET, SLACK_STATE_SECRET, DATABASE_URL, PUBLIC_BASE_URL, INSTALLATION_ENCRYPTION_KEY.*must be configured/,
+      );
+    });
+
+    it("loads INSTALLATION_ENCRYPTION_KEY", () => {
+      const config = loadConfig({
+        ...oauthBase,
+        PUBLIC_BASE_URL: "https://api.example.com",
+      });
+      expect(config.encryptionKey).toBe(KEY);
+    });
+
+    it("requires INSTALLATION_ENCRYPTION_KEY in OAuth mode", () => {
+      expect(() =>
+        loadConfig({
+          ...oauthBase,
+          PUBLIC_BASE_URL: "https://api.example.com",
+          INSTALLATION_ENCRYPTION_KEY: "",
+        }),
+      ).toThrow(/INSTALLATION_ENCRYPTION_KEY is required for OAuth mode/);
+    });
+
+    it.each([
+      ["too short", Buffer.alloc(16).toString("base64")],
+      ["hex", Buffer.alloc(32, 7).toString("hex")],
+      ["not base64", "not a key"],
+    ])("rejects an INSTALLATION_ENCRYPTION_KEY that is %s", (_, key) => {
+      expect(() =>
+        loadConfig({
+          ...oauthBase,
+          PUBLIC_BASE_URL: "https://api.example.com",
+          INSTALLATION_ENCRYPTION_KEY: key,
+        }),
+      ).toThrow(
+        /INSTALLATION_ENCRYPTION_KEY must be 32 bytes encoded as base64/,
       );
     });
   });
