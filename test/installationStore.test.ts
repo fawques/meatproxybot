@@ -2,10 +2,21 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PostgresInstallationStore } from "../src/installationStore.js";
+import { decryptToken, encryptToken } from "../src/tokenCrypto.js";
 
 // Runs against a real Postgres when TEST_DATABASE_URL is set (CI provides
 // one); skipped otherwise. Each test gets its own schema.
 const databaseUrl = process.env.TEST_DATABASE_URL;
+const key = Buffer.alloc(32, 1);
+const otherKey = Buffer.alloc(32, 2);
+
+function storeWith(schema: string, encryptionKey: Buffer) {
+  return new PostgresInstallationStore({
+    databaseUrl: databaseUrl as string,
+    schema,
+    encryptionKey: encryptionKey.toString("base64"),
+  });
+}
 
 function installation(teamId: string, token: string, enterpriseId?: string) {
   return {
@@ -30,12 +41,16 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
     return result.rows as { bot_token: string; enterprise_id: string }[];
   }
 
+  async function tokens(teamId: string) {
+    return (await rows(teamId)).map((row) => {
+      expect(row.bot_token).toMatch(/^v1:/);
+      return decryptToken(row.bot_token, key);
+    });
+  }
+
   beforeEach(() => {
     schema = `test_${randomUUID().replaceAll("-", "")}`;
-    store = new PostgresInstallationStore({
-      databaseUrl: databaseUrl as string,
-      schema,
-    });
+    store = storeWith(schema, key);
   });
 
   afterEach(async () => {
@@ -52,9 +67,7 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
     await store.save(installation("T1", "xoxb-old"));
     await store.save(installation("T1", "xoxb-new"));
 
-    const stored = await rows("T1");
-    expect(stored).toHaveLength(1);
-    expect(stored[0]?.bot_token).toBe("xoxb-new");
+    expect(await tokens("T1")).toEqual(["xoxb-new"]);
 
     const found = await store.find({
       teamId: "T1",
@@ -119,22 +132,80 @@ describe.skipIf(!databaseUrl)("PostgresInstallationStore", () => {
     // Running it again must be a no-op.
     await store.init();
 
-    const t1 = await rows("T1");
-    expect(t1).toHaveLength(1);
-    expect(t1[0]?.bot_token).toBe("xoxb-t1-new");
+    expect(await tokens("T1")).toEqual(["xoxb-t1-new"]);
     expect(await rows("T2")).toHaveLength(1);
     expect(await rows("T3")).toHaveLength(1);
 
     // The constraint now holds, so a reinstall updates the surviving row.
     await store.save(installation("T1", "xoxb-t1-reinstall"));
-    const after = await rows("T1");
-    expect(after).toHaveLength(1);
-    expect(after[0]?.bot_token).toBe("xoxb-t1-reinstall");
+    expect(await tokens("T1")).toEqual(["xoxb-t1-reinstall"]);
     const t3 = await store.find({
       teamId: "T3",
       isEnterpriseInstall: false,
       enterpriseId: "E1",
     });
     expect(t3?.bot).toMatchObject({ token: "xoxb-t3" });
+  });
+
+  it("never stores a plain-text token", async () => {
+    await store.init();
+    await store.save(installation("T1", "xoxb-secret"));
+
+    const [row] = await rows("T1");
+    expect(row?.bot_token).not.toContain("xoxb-");
+    expect(row?.bot_token).toMatch(/^v1:[^:]+:[^:]+:[^:]+$/);
+  });
+
+  it("encrypts plain-text tokens left from before encryption", async () => {
+    await store.init();
+    await admin.query(
+      `INSERT INTO "${schema}".installations (team_id, bot_token) VALUES ('T1', 'xoxb-plain')`,
+    );
+
+    // Still readable before the migration runs...
+    const before = await store.find({
+      teamId: "T1",
+      isEnterpriseInstall: false,
+    });
+    expect(before?.bot).toMatchObject({ token: "xoxb-plain" });
+
+    // ...and encrypted by the next startup.
+    await store.init();
+    expect(await tokens("T1")).toEqual(["xoxb-plain"]);
+    const after = await store.find({
+      teamId: "T1",
+      isEnterpriseInstall: false,
+    });
+    expect(after?.bot).toMatchObject({ token: "xoxb-plain" });
+  });
+
+  it("refuses to start with a key that does not match the stored tokens", async () => {
+    await store.init();
+    await store.save(installation("T1", "xoxb-secret"));
+
+    const wrong = storeWith(schema, otherKey);
+    try {
+      await expect(wrong.init()).rejects.toThrow(
+        /Workspace T1: .*INSTALLATION_ENCRYPTION_KEY is not the key/,
+      );
+    } finally {
+      await wrong.close();
+    }
+    // The failed startup changed nothing.
+    expect(await tokens("T1")).toEqual(["xoxb-secret"]);
+  });
+
+  it("fails loudly when reading a token encrypted with another key", async () => {
+    await store.init();
+    await admin.query(
+      `INSERT INTO "${schema}".installations (team_id, bot_token) VALUES ('T1', $1)`,
+      [encryptToken("xoxb-secret", otherKey)],
+    );
+
+    await expect(
+      store.find({ teamId: "T1", isEnterpriseInstall: false }),
+    ).rejects.toThrow(
+      /Workspace T1: .*INSTALLATION_ENCRYPTION_KEY is not the key/,
+    );
   });
 });

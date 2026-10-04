@@ -1,4 +1,11 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
+import {
+  TokenDecryptionError,
+  decryptToken,
+  encryptToken,
+  isEncryptedToken,
+  parseEncryptionKey,
+} from "./tokenCrypto.js";
 
 export interface InstallationQuery {
   teamId: string;
@@ -9,6 +16,8 @@ export interface InstallationQuery {
 export interface PostgresInstallationStoreOptions {
   databaseUrl: string;
   schema: string;
+  /** INSTALLATION_ENCRYPTION_KEY: 32 bytes, base64. Encrypts bot tokens. */
+  encryptionKey: string;
 }
 
 interface StoredInstallation {
@@ -23,9 +32,11 @@ interface StoredInstallation {
 export class PostgresInstallationStore {
   private pool: Pool;
   private schema: string;
+  private encryptionKey: Buffer;
 
   constructor(options: PostgresInstallationStoreOptions) {
     this.schema = options.schema;
+    this.encryptionKey = parseEncryptionKey(options.encryptionKey);
     this.pool = new Pool({
       connectionString: options.databaseUrl,
       min: 2,
@@ -47,7 +58,7 @@ export class PostgresInstallationStore {
           id SERIAL PRIMARY KEY,
           team_id VARCHAR(255) NOT NULL,
           enterprise_id VARCHAR(255) NOT NULL DEFAULT '',
-          bot_token VARCHAR(255) NOT NULL,
+          bot_token TEXT NOT NULL,
           bot_id VARCHAR(255),
           bot_user_id VARCHAR(255),
           app_id VARCHAR(255),
@@ -81,14 +92,58 @@ export class PostgresInstallationStore {
 
         ALTER TABLE ${table}
           ALTER COLUMN enterprise_id SET DEFAULT '',
-          ALTER COLUMN enterprise_id SET NOT NULL;
+          ALTER COLUMN enterprise_id SET NOT NULL,
+          ALTER COLUMN bot_token TYPE TEXT;
       `);
+      await this.encryptStoredTokens(client, table);
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  /**
+   * Encrypts tokens stored in plain text before encryption existed, and
+   * checks every encrypted one decrypts, so a wrong
+   * INSTALLATION_ENCRYPTION_KEY stops startup instead of surfacing later as
+   * Slack auth failures.
+   */
+  private async encryptStoredTokens(
+    client: PoolClient,
+    table: string,
+  ): Promise<void> {
+    const result = await client.query(
+      `SELECT id, team_id, enterprise_id, bot_token FROM ${table}`,
+    );
+    for (const row of result.rows as (StoredInstallation & { id: number })[]) {
+      if (isEncryptedToken(row.bot_token)) {
+        this.decrypt(row);
+      } else {
+        await client.query(`UPDATE ${table} SET bot_token = $1 WHERE id = $2`, [
+          encryptToken(row.bot_token, this.encryptionKey),
+          row.id,
+        ]);
+      }
+    }
+  }
+
+  private decrypt(row: StoredInstallation): string {
+    // Tolerate a plain-text token that has not been migrated yet.
+    if (!isEncryptedToken(row.bot_token)) {
+      return row.bot_token;
+    }
+    try {
+      return decryptToken(row.bot_token, this.encryptionKey);
+    } catch (error) {
+      const workspace = row.enterprise_id
+        ? `${row.team_id} (enterprise ${row.enterprise_id})`
+        : row.team_id;
+      throw new TokenDecryptionError(
+        `Workspace ${workspace}: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -127,7 +182,7 @@ export class PostgresInstallationStore {
       await client.query(query, [
         teamId,
         enterpriseId,
-        botToken,
+        encryptToken(botToken, this.encryptionKey),
         botId,
         botUserId,
         appId,
@@ -161,7 +216,7 @@ export class PostgresInstallationStore {
         team: { id: row.team_id },
         bot: {
           id: row.bot_id,
-          token: row.bot_token,
+          token: this.decrypt(row),
           scopes: [],
         },
         bot_user_id: row.bot_user_id,

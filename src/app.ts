@@ -103,6 +103,7 @@ export async function createApp(
     globalInstallationStore = new PostgresInstallationStore({
       databaseUrl: config.databaseUrl,
       schema: config.databaseSchema,
+      encryptionKey: config.encryptionKey ?? "",
     });
     await globalInstallationStore.init();
   }
